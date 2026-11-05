@@ -1,0 +1,35 @@
+// React (Vite) module: wraps npm scripts as Gradle tasks
+def npm = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+
+tasks.register('npmInstall', Exec) {
+    group = 'frontend'
+    inputs.file('package.json')
+    outputs.dir('node_modules')
+    commandLine npm, 'install'
+}
+
+tasks.register('npmBuild', Exec) {
+    group = 'frontend'
+    dependsOn 'npmInstall'
+    inputs.dir('src')
+    inputs.dir('public')
+    inputs.files('index.html', 'package.json', 'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json')
+    outputs.dir('dist')
+    commandLine npm, 'run', 'build'
+}
+
+tasks.register('npmDev', Exec) {
+    group = 'frontend'
+    dependsOn 'npmInstall'
+    commandLine npm, 'run', 'dev'
+}
+
+tasks.register('build') {
+    group = 'build'
+    dependsOn 'npmBuild'
+}
+
+tasks.register('clean', Delete) {
+    group = 'build'
+    delete 'dist'
+}
