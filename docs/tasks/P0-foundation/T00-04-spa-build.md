@@ -2,7 +2,7 @@
 id: T00-04
 title: "SPA builds and renders without Cognito/API configuration"
 phase: P0-foundation
-status: Todo
+status: In progress
 agent: frontend
 skills: [react-expert]
 depends_on: []
@@ -43,3 +43,9 @@ page and W1-G1 fails.
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-05 (started on the owner's direct request, before spa-hosting is Accepted): IDE import errors were caused
+  by dependencies not installed (`node_modules` held only the Vite template). `npm ci` from the lockfile fixed them;
+  `tsc -b` and `vite build` green. Open: (1) `npm run lint` fails — oxlint 1.89 needs Node ≥ 22.12, local Node is
+  22.11.0, so npm skipped the optional `@oxlint/binding-win32-x64-msvc`; (2) CSS budget violated: 317 410 bytes,
+  mostly `@aws-amplify/ui-react` styles (limit 10 240); (3) JS bundle 811 kB (Vite chunk-size warning).

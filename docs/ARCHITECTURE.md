@@ -1,10 +1,27 @@
 # ARCHITECTURE.md — AWS Challenge
 
-Status: **draft v0.2 (2026-10-23)**. Decisions marked *Proposed* need the owner's confirmation (task
-[ARCH-01](tasks/ARCH-01.md)) and are not implemented before that. Open decisions and risks live in
-[RISKS.md](RISKS.md); the work breakdown lives in [PLAN.md](PLAN.md) and [tasks/](tasks/).
+Status: **draft v0.3 (2026-11-05)**. This file holds the system-wide principles, components and ADRs. Decisions
+marked *Proposed* need the owner's confirmation and are not implemented before that. Feature-level detail lives in
+[design/](design/) (one doc per feature, written before coding), behaviour in [specs/](specs/), open decisions and
+risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
 
 ---
+
+## 0. Principles
+
+1. **Serverless and pay-per-use first;** always-on resources (RDS, RDS Proxy, NAT/endpoints) only where a goal needs
+   them, and the stack can be destroyed when idle.
+2. **Private by default:** no public IP for backend resources; the database is reachable only through RDS Proxy.
+3. **Least privilege:** one IAM role per function, scoped to exact resource ARNs.
+4. **Secrets never leave Secrets Manager:** not in code, env var values, logs or Git.
+5. **Everything as code:** infrastructure through IaC, schema through Flyway, deploys from Git.
+6. **Observable:** one JSON log line per event, correlated across the chain (G8).
+7. **Decide before building:** ADR or design doc first, alternatives with trade-offs, the owner decides.
+
+> Week 1 note: sections §2–§4 and §10 describe the target design. If Q-08 and Q-10 option A are accepted, the
+> Week 1 network (public subnet + NAT) and the three plain-Java functions in
+> [design/backend-foundation.md](design/backend-foundation.md) supersede the "no NAT" and "four Spring functions"
+> statements below until those sections are updated.
 
 ## 1. Context and goals
 
@@ -117,7 +134,7 @@ validated.
 - PostConfirmation trigger → `sync` function (published alias).
 
 ### 3.5 Data: RDS PostgreSQL + RDS Proxy
-- RDS PostgreSQL (newest major supported by RDS Proxy, see [R-07](RISKS.md#2-risk-register)), `db.t4g.micro`,
+- RDS PostgreSQL (major version per [Q-09](RISKS.md#q-09)), `db.t4g.micro`,
   single-AZ (learning setup), encrypted with KMS, 7-day backups.
 - RDS Proxy: credentials from Secrets Manager, **TLS required**, idle client timeout 30 min.
 - Lambda connects **only** to the proxy endpoint. Hikari in Lambda: max pool 2, min idle 0.
@@ -172,7 +189,7 @@ using HNSW → documents with `distance`. Logged: query length, token count, Bed
 
 ### 5.4 Knowledge base ingestion
 `POST /api/admin/documents` (admin) or a batch loader: text → chunks → embeddings → insert.
-Details depend on [Q-05](RISKS.md#q-05) — task [BE-08](tasks/BE-08.md).
+Details depend on [Q-05](RISKS.md#q-05).
 
 ---
 
@@ -187,8 +204,8 @@ Details depend on [Q-05](RISKS.md#q-05) — task [BE-08](tasks/BE-08.md).
 | GET | `/api/admin/documents` | JWT + `admin` | `page`, `size` | `{items[], page, size, total}` |
 | POST | `/api/admin/documents` | JWT + `admin` | `{title, content}` | `{id}` |
 
-Errors: `application/problem+json` (RFC 9457); status codes 400 / 401 / 403 / 404 / 429 / 500 / 502 (Bedrock).
-A machine-readable OpenAPI spec is produced in [BE-10](tasks/BE-10.md).
+Conventions (auth header, pagination, filtering, errors): CLAUDE.md §6. 502 is used for Bedrock failures.
+A machine-readable OpenAPI spec is produced when the API is built.
 
 ---
 
@@ -220,7 +237,7 @@ IVFFlat `(lists ≈ rows/1000)` built after data load, for the comparison experi
   Role-based authorisation in code.
 - **Input:** Bean Validation on all DTOs; parameterised SQL only.
 - **CORS** explicit origin list. **Logs** contain no tokens, passwords or PII beyond `sub`.
-- Optional (stretch): AWS WAF, Cognito advanced security, IAM auth to RDS Proxy ([INF-09](tasks/INF-09.md)).
+- Optional (stretch): AWS WAF, Cognito advanced security, IAM auth to RDS Proxy.
 
 ---
 
@@ -232,8 +249,8 @@ IVFFlat `(lists ≈ rows/1000)` built after data load, for the comparison experi
 - **What is logged:** one access line per request (method, path, status, duration); Bedrock calls (model, tokens,
   latency); vector search (k, latency, result count); errors with stack traces.
 - **Retention:** 14 days for every log group, set in IaC.
-- **Logs Insights saved queries** ([OBS-03](tasks/OBS-03.md)): trace by `apiRequestId`, p95 latency, errors by status.
-- Metrics/alarms (stretch, [OBS-04](tasks/OBS-04.md)): API 5xx, Lambda errors/throttles, Proxy `DatabaseConnections`.
+- **Logs Insights saved queries:** trace by `apiRequestId`, p95 latency, errors by status.
+- Metrics/alarms (stretch): API 5xx, Lambda errors/throttles, Proxy `DatabaseConnections`.
 
 ---
 
@@ -245,7 +262,7 @@ IVFFlat `(lists ≈ rows/1000)` built after data load, for the comparison experi
 | Cold start (with SnapStart) | < 2 s |
 | Timeouts | API GW 30 s (HTTP API limit), API Lambdas 25 s, `sync` 5 s |
 | Lambda | Java 21, arm64, 1536 MB (to be tuned by measurement), SnapStart on published versions |
-| Cost | learning budget: RDS t4g.micro, no NAT; main cost drivers are RDS Proxy and interface endpoints — stop the stack when idle ([OPS-04](tasks/OPS-04.md)) |
+| Cost | learning budget; figures in each design doc's Cost section (Week 1: [backend-foundation](design/backend-foundation.md)); stop the stack when idle ([R-06](RISKS.md#2-risk-register)) |
 
 ---
 
@@ -264,7 +281,7 @@ IVFFlat `(lists ≈ rows/1000)` built after data load, for the comparison experi
 | ADR-009 | Region | **Open** | [Q-03](RISKS.md#q-03) |
 | ADR-010 | LLM chatbot | **Proposed** | Stage 1 semantic search only; Claude/Agent as stretch — [Q-06](RISKS.md#q-06) |
 | ADR-011 | User synchronisation | **Proposed** | PostConfirmation trigger directly, no EventBridge |
-| ADR-012 | Log format | **Proposed** | Spring structured logging (ECS JSON) + Lambda log format to be confirmed by spike [OBS-01](tasks/OBS-01.md) |
+| ADR-012 | Log format | **Proposed** | Spring structured logging (ECS JSON) + Lambda log format to be confirmed by a spike |
 
 **ADR-001 — IaC with AWS CDK (Java).** Same language as the backend, type-safe constructs, good L2 constructs for
 VPC, RDS Proxy, Lambda, HTTP API and Cognito; cdk-nag for automated checks. *Alternatives:* Terraform (industry
@@ -281,10 +298,11 @@ usage plans, request validation, direct WAF association.
 
 **ADR-004 — Access token.** Meant for API authorisation; carries `cognito:groups`, `scope`, `client_id`. The ID token
 is for the client. The API reads the email from `app_user` by `sub`. *Consequence:* the draft code uses the ID token —
-fixed in [FE-00](tasks/FE-00.md) / [BE-02](tasks/BE-02.md).
+fixed when authentication is built.
 
-**ADR-005 — Isolated network.** No path to the internet → smaller attack surface, no NAT cost (~$32/month + traffic).
-Price: interface endpoints (~$7/month per endpoint per AZ) and no calls to external APIs ([R-09](RISKS.md#2-risk-register)).
+**ADR-005 — Isolated network.** No path to the internet → smaller attack surface, no NAT. Price: one interface
+endpoint per AWS service and no calls to external APIs ([R-09](RISKS.md#2-risk-register)). Challenged by the Week 1
+curriculum (public subnet + NAT) — see [Q-08](RISKS.md#q-08) for options and cost.
 
 **ADR-006 — Database access.** Lambda reads the secret from Secrets Manager at init (cached, refreshed after
 SnapStart restore) and connects to the proxy over TLS. Stage 2: IAM authentication to the proxy removes the password
@@ -292,7 +310,7 @@ from Lambda.
 
 **ADR-007 — Vectors.** 1024 is Titan v2's maximum and best accuracy; 512 is a fallback if storage grows.
 HNSW: no training step, good recall, can be built on an empty table. IVFFlat: smaller, but needs data before building
-and tuning of `lists`/`probes` — kept for the learning comparison ([DB-03](tasks/DB-03.md)).
+and tuning of `lists`/`probes` — kept for the learning comparison.
 
 **ADR-008 — Migrations.** Flyway on every cold start adds latency and lock contention on parallel starts. A dedicated
 `migrate` function is invoked by the pipeline before traffic moves to the new alias.
@@ -308,13 +326,13 @@ without double wrapping ([R-10](RISKS.md#2-risk-register)). The spike decides th
 
 ## 12. Goal traceability and acceptance criteria
 
-| Goal | Components | Tasks | Acceptance criterion |
+| Goal | Components | Covered by | Acceptance criterion |
 |---|---|---|---|
-| G1 | Amplify Hosting, `amplify.yml` | [OPS-01](tasks/OPS-01.md), [INF-08](tasks/INF-08.md), [FE-06](tasks/FE-06.md) | push to `main` → new SPA version live without manual steps |
-| G2 | CloudFront (Amplify), VPC | [INF-02](tasks/INF-02.md), [INF-08](tasks/INF-08.md) | SPA served by CloudFront (`x-cache`, `via`); backend has no public IPs and no route to the internet |
-| G3 | Cognito, Amplify Auth | [INF-04](tasks/INF-04.md), [FE-02](tasks/FE-02.md), [BE-04](tasks/BE-04.md) | sign-up → email code → sign-in → tokens in SPA; user present in DB |
-| G4 | HTTP API, JWT authorizer, Lambda in VPC | [INF-05](tasks/INF-05.md), [INF-06](tasks/INF-06.md), [BE-02](tasks/BE-02.md) | no token → 401, token → 200, non-admin on `/api/admin` → 403 |
-| G5 | RDS Proxy, RDS | [INF-03](tasks/INF-03.md), [BE-03](tasks/BE-03.md) | Lambda connects only to the proxy endpoint; proxy metrics show client connections |
-| G6 | pgvector, HNSW, IVFFlat | [DB-01](tasks/DB-01.md), [DB-02](tasks/DB-02.md), [DB-03](tasks/DB-03.md) | `EXPLAIN` shows an HNSW index scan; HNSW vs IVFFlat comparison recorded |
-| G7 | Bedrock Titan | [INF-07](tasks/INF-07.md), [BE-07](tasks/BE-07.md) | 1024-dim embedding computed from Lambda through the VPC endpoint |
-| G8 | CloudWatch, JSON logs | [OBS-01](tasks/OBS-01.md), [OBS-02](tasks/OBS-02.md), [OBS-03](tasks/OBS-03.md) | one request traced by `apiRequestId` through API GW → Lambda → Bedrock/DB |
+| G1 | Amplify Hosting, `amplify.yml` | Week 1 — [spec 01](specs/01-spa-delivery.md) | push to `main` → new SPA version live without manual steps |
+| G2 | CloudFront (Amplify), VPC | Week 1 — [spec 01](specs/01-spa-delivery.md), [spec 02](specs/02-database-connectivity.md) | SPA served by CloudFront (`x-cache`, `via`); backend has no public IPs (outbound path per [Q-08](RISKS.md#q-08)) |
+| G3 | Cognito, Amplify Auth | later week | sign-up → email code → sign-in → tokens in SPA; user present in DB |
+| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); API — later week | no token → 401, token → 200, non-admin on `/api/admin` → 403 |
+| G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md) | Lambda connects only to the proxy endpoint; proxy metrics show client connections |
+| G6 | pgvector, HNSW, IVFFlat | later week | `EXPLAIN` shows an HNSW index scan; HNSW vs IVFFlat comparison recorded |
+| G7 | Bedrock Titan | later week | 1024-dim embedding computed from Lambda inside the VPC |
+| G8 | CloudWatch, JSON logs | Week 1 (log groups, [spec 02](specs/02-database-connectivity.md)); tracing — later week | one request traced by `apiRequestId` through API GW → Lambda → Bedrock/DB |
