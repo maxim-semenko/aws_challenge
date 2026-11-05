@@ -1,0 +1,111 @@
+plugins {
+    id 'java'
+    // 4.0.x: the line supported by aws-serverless-java-container-springboot4 3.0.x
+    // (it is built against Spring Boot 4.0.8 / Spring Framework 7.0.9)
+    id 'org.springframework.boot' version '4.0.8'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.scnsoft.max'
+version = '0.0.1-SNAPSHOT'
+description = 'aws_challenge'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    awsSdkVersion = '2.57.2'
+    awsServerlessJavaContainerVersion = '3.0.4'
+    awsLambdaJavaCoreVersion = '1.4.0'
+    awsLambdaJavaEventsVersion = '3.16.1'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    configureEach {
+        // AWS SDK v2: keep only the lightweight url-connection-client (faster Lambda cold start, smaller zip)
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+    }
+}
+
+dependencies {
+    // --- Web / API ---
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // --- PostgreSQL (via RDS Proxy) + pgvector ---
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    implementation 'org.hibernate.orm:hibernate-vector'          // vector(n) <-> float[] mapping
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // --- AWS Lambda runtime ---
+    // Runs the Spring MVC app inside Lambda behind API Gateway (HTTP API, payload v2)
+    implementation "com.amazonaws.serverless:aws-serverless-java-container-springboot4:${awsServerlessJavaContainerVersion}"
+    implementation "com.amazonaws:aws-lambda-java-core:${awsLambdaJavaCoreVersion}"
+    implementation "com.amazonaws:aws-lambda-java-events:${awsLambdaJavaEventsVersion}"   // Cognito PostConfirmation event
+
+    // --- AWS SDK v2 (versions from the BOM) ---
+    implementation 'software.amazon.awssdk:bedrockruntime'        // Titan Text Embeddings (InvokeModel) + Claude (Converse)
+    implementation 'software.amazon.awssdk:url-connection-client'
+    // Bedrock Agents (InvokeAgent) are async/streaming only and need an async HTTP client:
+    // add 'software.amazon.awssdk:bedrockagentruntime' + 'software.amazon.awssdk:aws-crt-client' when you get there.
+
+    // --- Lombok ---
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // --- Tests (Testcontainers needs Docker running locally) ---
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Lambda deployment package: compiled classes at the root + dependencies in lib/
+// (the layout the Java Lambda runtime expects; a Spring Boot fat jar does not work there).
+// Embedded Tomcat is left out: inside Lambda requests come from API Gateway, not a socket.
+tasks.register('buildZip', Zip) {
+    group = 'build'
+    description = 'Builds the AWS Lambda deployment package (build/distributions/backend-lambda.zip)'
+    archiveFileName = "${project.name}-lambda.zip"
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    from tasks.named('compileJava')
+    from tasks.named('processResources')
+    into('lib') {
+        from(configurations.runtimeClasspath) {
+            exclude 'tomcat-embed-*'
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn 'buildZip'
+}
