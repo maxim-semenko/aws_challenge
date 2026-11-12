@@ -2,7 +2,7 @@
 id: T01-01
 title: "Network stack: VPC, subnets, NAT, security groups"
 phase: P1-environment
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect]
 depends_on: []  # built manually without an IaC base (Q-12 C)
@@ -51,3 +51,5 @@ group exposes the database; a missing outbound path makes Secrets Manager calls 
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

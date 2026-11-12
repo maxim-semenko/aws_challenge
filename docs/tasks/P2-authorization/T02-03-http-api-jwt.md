@@ -21,29 +21,30 @@ without whom the admin route of W2-G4 cannot be proven.
 
 ## // TECHNICAL CONSTRAINTS
 
-- AWS CLI commands with profile `awsch`, recorded as a replayable runbook in Notes (Q-12 C).
-- API `awsch-dev-api`, HTTP type, settings exactly as in
+- No AWS access for the agent (CLAUDE.md §3.11): devops writes a step-by-step console runbook in Notes (page, field,
+  exact value); the owner executes it and reports back ids, the invoke URL and screenshots.
+- API `aws-challenge-api`, HTTP type, settings exactly as in
   [design/api-gateway-auth](../../design/api-gateway-auth.md) §Proposed Solution (authorizer, two routes, no
   `ANY`/`$default` route, payload 2.0, CORS origins, throttling, access log format, retention 14 days).
-- Before deploying: invoke `awsch-dev-admin` with `{}` and record the result (baseline for AC-05.10).
-- Deploy the T02-02 zip to `awsch-dev-admin`; runtime set to Python 3.13 if the build differs (ADR-015); memory,
-  timeout, VPC, role and env vars unchanged.
-- Invoke permission for `apigateway.amazonaws.com` with `SourceArn` of this API only.
+- Before the upload: the owner invokes `aws-challenge-admin` with `{}` (console Test tab) and reports the result
+  (baseline for AC-05.10).
+- The owner uploads the T02-02 zip to `aws-challenge-admin` ("Upload from .zip file"); runtime set to Python 3.13 if
+  the build differs (ADR-015); memory, timeout, VPC, role and env vars unchanged.
+- Invoke permission for `apigateway.amazonaws.com` with a `SourceArn` of this API only.
 - Amplify env var `VITE_API_URL` = invoke URL (branch rebuild noted).
-- First admin: the owner's account (signed up through the SPA when T02-04 is available, otherwise
-  `aws cognito-idp sign-up` + `confirm-sign-up`) added with `admin-add-user-to-group --group-name admin`.
+- First admin: the owner's account (signed up through the SPA when T02-04 is available, otherwise created in the
+  Cognito console) added to the group `admin` in the Cognito console.
 - Tokens used for testing are never written to Notes or logs; evidence shows status codes and decoded claim names only.
-- Show every command to the owner and wait for the go-ahead before running it (CLAUDE.md §3.8).
 
 ## // SCOPE
 
 **Implement**
-- HTTP API, JWT authorizer, routes, integration, stage, CORS, access log group
-- Deploy `admin` code; set `VITE_API_URL`; add the owner to `admin`
-- Verify AC-04.3, AC-05.1 … AC-05.11 with `curl` and the AWS CLI (test users: the owner = admin, one non-admin test
-  user)
-- Runbook in Notes; skill file `http-api-jwt` (authorizer settings, ID vs access token audience, CORS, access log
-  format, how to add a route; skills ownership rule)
+- Console runbook for: HTTP API, JWT authorizer, routes, integration, stage, CORS, access log group; upload of the
+  `admin` zip; `VITE_API_URL`; adding the owner to `admin`
+- Verify steps for AC-04.3, AC-05.1 … AC-05.11 (console checks and `curl` commands the owner runs; test users: the
+  owner = admin, one non-admin test user); the owner's evidence recorded in Notes
+- Skill file `http-api-jwt` (authorizer settings, ID vs access token audience, CORS, access log format, how to add a
+  route; skills ownership rule)
 
 **Exclude**
 - `GET /api/health`, custom domain, WAF, IaC code (T00-03)
@@ -53,7 +54,7 @@ without whom the admin route of W2-G4 cannot be proven.
 
 ## Definition of Done
 
-- [ ] AC-04.3, AC-05.1 … AC-05.11 verified, evidence in Notes
+- [ ] Runbook executed by the owner; AC-04.3, AC-05.1 … AC-05.11 verified from the owner's evidence, recorded in Notes
 - [ ] Monthly cost noted (per-request only)
 - [ ] Skill file added; ARCH review passed
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)

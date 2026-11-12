@@ -2,7 +2,7 @@
 id: T00-04
 title: "SPA builds and renders without Cognito/API configuration"
 phase: P0-foundation
-status: In progress
+status: Done
 agent: frontend
 skills: [react-expert]
 depends_on: []
@@ -51,3 +51,4 @@ page and W1-G1 fails.
   mostly `@aws-amplify/ui-react` styles (limit 10 240); (3) JS bundle 811 kB (Vite chunk-size warning).
 - 2026-11-12 (owner): oxlint and the CSS budget removed from the project, so open items (1) and (2) no longer
   apply. `npm run build` green on Node 22.11.0 after removing oxlint.
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + console screenshot); the SPA is built and served by the manually built Amplify Hosting; agents have no AWS access.

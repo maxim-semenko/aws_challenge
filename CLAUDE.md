@@ -9,6 +9,8 @@ Rules here override any skill or agent file.
 |---|---|---|
 | `CLAUDE.md` | rules, tech stack, design tokens, API conventions, invariants | the only place for these |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | principles, components, **recorded decisions (ADRs)**, goal traceability G1–G8 | system-wide only |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | identifiers and settings of the AWS resources as built by the owner (no account id, no secrets) | the only place for these; updated by every task that creates or changes a resource |
+| `lambdas/<function>/` | Python code of each Lambda function (`admin`, `chatbot`, `sync`) | code mirrors what is deployed |
 | [docs/RISKS.md](docs/RISKS.md) | **open** decisions `Q-xx` (block tasks), risks `R-xx` | an answered `Q-xx` becomes an ADR or a design-doc decision |
 | [docs/requirements/](docs/requirements/) | export of each curriculum week, as given | input only, never rewritten |
 | [docs/design/](docs/design/) | one design doc per feature: Problem Statement, Proposed Solution, Alternatives Considered, API Design, Affected Components, Security Considerations, Open Questions (+ optional Cost) | `Accepted` by the owner before any task of the feature starts |
@@ -41,11 +43,15 @@ planned** (now: Week 2 — authorization).
 5. **ADRs before implementation.** *Proposed* decisions are not implemented until the owner accepts them.
 6. **Read before editing.** Targeted edits over rewrites. Never delete user files without explicit consent.
 7. **Honest status.** If a build, test or deploy did not run, say "not verified" — never "done".
-8. **No commit, push or AWS change without the owner's go-ahead**, even if a skill suggests it.
+8. **No commit or push without the owner's go-ahead**, even if a skill suggests it.
 9. **Task status:** agents set `In progress` and `Review`; only the owner sets `Done` (after the architect review
    for `devops` and `backend` tasks).
 10. **Language:** conversation with the owner in Russian; documentation, code, identifiers, comments and commit
     messages in English.
+11. **Agents have no AWS access, ever** — no AWS CLI, no SDK call, no console automation against the account. The
+    owner makes every AWS change manually in the console from a step-by-step console runbook (exact values to enter)
+    that the `devops` agent writes in the task, and reports back the resulting identifiers and screenshots. Evidence
+    of AWS state always comes from the owner (Q-12 C).
 
 ## 4. Tech stack
 
@@ -56,10 +62,10 @@ planned** (now: Week 2 — authorization).
 | AWS SDK | `boto3` in Lambdas; JS SDK v3 only through `aws-amplify` | accepted |
 | Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, dimension per ADR-007 / Q-15; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
 | Frontend | React 19, Vite 6, TypeScript 5.8 strict, React Router 7, TanStack Query 5, `aws-amplify` 6 — Vite SPA, no Next.js / Server Components; npm (Gradle Wrapper 9.8.2 only wraps the npm scripts in `frontend/build.gradle`) | accepted |
-| AWS changes | AWS CLI commands recorded as a runbook in the task Notes (Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (runbooks); IaC pending Q-02 |
-| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region as built (Q-03 closed, value recorded by T01-06) |
+| AWS changes | made by the owner in the AWS console from a devops console runbook in the task (§3.11, Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (console runbooks); IaC pending Q-02 |
+| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
 | Tests | `pytest` (Lambdas); frontend test runner introduced by the first task that needs one; Playwright for E2E (planned) | — |
-| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from T02-02), Docker Desktop, AWS CLI v2 profile `awsch` | — |
+| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from T02-02), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
 
 Exact library versions live in each `lambdas/<function>/requirements.txt` and in `frontend/package.json`, nowhere
 else.
@@ -82,7 +88,7 @@ ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) a
 
 - **Style:** REST over HTTPS, JSON (`application/json`, UTF-8), all paths under `/api`, no version segment in the
   path (breaking changes need an ADR), nouns in plural, no OData, no GraphQL.
-- **Auth:** `Authorization: Bearer <Cognito token>` — access token proposed (ADR-004, Proposed).
+- **Auth:** `Authorization: Bearer <Cognito token>` — access token (ADR-004, Accepted).
 - **Pagination:** query `page` (0-based, default 0) and `size` (1..100, default 20); response
   `{ "items": [...], "page": n, "size": n, "total": n }`.
 - **Filtering / sorting:** exact field names as query parameters (`?email=...`); `sort=<field>,asc|desc`; only fields
@@ -105,8 +111,9 @@ ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) a
   changes by hand.
 - **Logging:** one JSON object per line; correlation fields `awsRequestId`, `apiRequestId`, `userSub`. Never log
   tokens, passwords, connection strings with credentials or full user queries (length/hash only).
-- **AWS resources:** names `awsch-<env>-<name>`; tags `project`, `env`, `owner`; every change as a recorded AWS CLI
-  runbook in the task Notes until IaC exists (T00-03); no console code edits of a function whose code is in Git.
+- **AWS resources:** names `aws-challenge-<name>` (single environment, as built in Week 1); tags `project`, `env`,
+  `owner`; every change as a console runbook executed by the owner (§3.11) until IaC exists (T00-03); no console code
+  edits of a function whose code is in Git (code is uploaded only as the zip built from Git).
 - **Frontend:** strict TypeScript, server data through TanStack Query, configuration only via `VITE_*`.
 
 ### Commit format
@@ -128,7 +135,7 @@ A task goes to `Review` only if all that apply hold (state "not verified" for an
 |---|---|---|
 | Build green | each affected `lambdas/<function>`: zip packaging per the `python-lambda` skill; `cd frontend && npm run build` (includes `tsc -b`) | any code change |
 | Tests green | `pytest` of each affected function; frontend tests where they exist | any code change |
-| Runbook | every AWS change recorded as replayable AWS CLI commands with verify commands in the task Notes | AWS changes |
+| Runbook | every AWS change written as a step-by-step console runbook with exact values and verify steps in the task; executed by the owner; resulting ids and evidence (screenshots, outputs) from the owner recorded in the task Notes | AWS changes |
 | IaC check | `synth` with policy checks, no unexplained suppressions | once IaC exists (T00-03) |
 | E2E gate | Playwright suite green against `dev` | once the suite exists (not in Week 1) |
 | Skill file | added/updated per the skills ownership rule (§8) | new dependency, interface or schema |
@@ -145,8 +152,8 @@ A task goes to `Review` only if all that apply hold (state "not verified" for an
 ## 8. Agents, skills, commands
 
 Agents: `architect` (design, ADRs, reviews), `backend` (Python Lambda code in `lambdas/`), `frontend` (`frontend/`),
-`tester` (acceptance, E2E), `devops` (AWS CLI runbooks, later IaC, AWS account, Git, CI/CD, hosting). Their skills are listed in each agent's front matter; a task
-may add skills in its own front matter.
+`tester` (acceptance, E2E), `devops` (console runbooks for the owner, later IaC, Git, CI/CD, hosting). Their skills
+are listed in each agent's front matter; a task may add skills in its own front matter.
 
 Skills in `.claude/skills/` are copied from [jeffallan/claude-skills](https://github.com/jeffallan/claude-skills)
 (MIT, commit `078a25c`); references for other platforms (Azure, GCP, GitLab, Kubernetes, Docker, Next.js RSC,
@@ -154,12 +161,13 @@ Spring Cloud, replication) were removed, the rest is kept as is.
 
 **Project overrides — they win over any skill text:**
 - Python 3.13 Lambda functions as zip deploys (ADR-015) — no backend application, containers, Kubernetes or GitOps.
-- AWS changes as AWS CLI runbooks (Q-12 C); IaC per Q-02 later; Terraform advice applies only if Q-02 chooses it.
+- Agents never access AWS (§3.11): every `aws ...` CLI/SDK example in a skill is reference only; AWS changes are
+  console runbooks executed by the owner (Q-12 C); IaC per Q-02 later; Terraform advice applies only if Q-02 chooses it.
 - Vite SPA without Server Components; vector dimension per ADR-007 / Q-15; secrets in Secrets Manager.
 - Learning setup: single region, single AZ where cheaper, no DR/RTO/RPO targets, no staging environment unless Q-07
   says otherwise; no PR/change-ticket flow until a CI task introduces it.
 - Tests: pytest for Lambdas; the examples in `test-master` and `postgres-pro` are for method only.
-- No commits, pushes or deployments without the owner's go-ahead (§3.8).
+- No commits or pushes without the owner's go-ahead (§3.8); deployments only by the owner (§3.11).
 
 **Skills ownership rule:** a task that adds a new external dependency (AWS service, library, tool), a new internal
 service interface or a new database schema MUST add or update a skill file in `.claude/skills/` describing how this
@@ -183,7 +191,8 @@ npm run build
 
 - Git repository on GitHub (`origin`), branch `main`. Work status: [docs/PLAN.md](docs/PLAN.md).
 - Week 1 AWS infrastructure (Amplify Hosting, VPC, RDS PostgreSQL 14, RDS Proxy, three Python Lambdas, log groups)
-  was built manually in the console by the owner; the facts are recorded by T01-06. No IaC yet (T00-03).
+  was built manually in the console by the owner and accepted 2026-11-12; known facts in ARCHITECTURE §4. No IaC
+  yet (T00-03).
 - The Lambda code exists only in AWS until it is brought into `lambdas/` (`admin`: T02-02; R-15).
 - The Spring Boot `backend/` draft was deleted (2026-11-12); `settings.gradle` includes only `frontend`.
 - `frontend/src` contains draft code written before the plan; handled by T00-04, T02-04, T02-05.

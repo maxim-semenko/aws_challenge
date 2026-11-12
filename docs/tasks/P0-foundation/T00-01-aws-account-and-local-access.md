@@ -2,7 +2,7 @@
 id: T00-01
 title: "AWS account, budget and local CLI/SDK access"
 phase: P0-foundation
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect]
 depends_on: []
@@ -55,3 +55,5 @@ SDK to work locally.
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

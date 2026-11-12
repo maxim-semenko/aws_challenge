@@ -1,7 +1,7 @@
 # Design — Backend foundation (VPC, RDS PostgreSQL, RDS Proxy, Lambda skeleton)
 
-Status: **Draft** — the owner built Week 1 manually in the AWS console (Q-12 C); T01-06 records the actual values,
-then the owner accepts this doc as the record of the build.
+Status: **Accepted** (2026-11-12, owner) — Week 1 was built manually in the AWS console (Q-12 C); the facts as built
+are in [ARCHITECTURE §4](../ARCHITECTURE.md#4-network) and win where they differ from the tables below.
 Requirements: [week-01](../requirements/week-01-environment.md) W1-G2, S3–S7 ·
 Spec: [02-database-connectivity](../specs/02-database-connectivity.md)
 Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.2, §3.5, §4, §8, ADR-006, ADR-015
@@ -13,9 +13,9 @@ with credentials from Secrets Manager and logs in CloudWatch.
 
 ## Proposed Solution
 
-Built manually in the console in one environment, in the region of the build (Q-03, Q-07 closed; values recorded by
-T01-06). Naming and tags per CLAUDE.md §7. The tables below are the design the build is checked against; where the
-build differs, T01-06 records it and the owner decides.
+Built manually in the console in one environment in the region of ADR-009 (Q-03, Q-07 closed). Naming and tags per CLAUDE.md
+§7. The tables below are the design; the build differs in the network (2 public subnets, S3 gateway endpoint, no NAT
+gateway shown — [R-09](../RISKS.md#2-risk-register)), see ARCHITECTURE §4.
 
 **Network (Q-08, decided by the build; the curriculum asks for 1 public subnet, 2 private subnets and a NAT).**
 
@@ -61,7 +61,7 @@ Log groups `/aws/lambda/<function>`, retention ≥ 7 days (S7). Each invocation 
 
 ## API Design
 
-No HTTP API in Week 1. Function contract (invoked with `aws lambda invoke`):
+No HTTP API in Week 1. Function contract (direct invoke, e.g. the console Test tab):
 
 | Function | Input event | Output |
 |---|---|---|
@@ -87,8 +87,9 @@ function code lives in the console until it is brought into Git (`admin`: T02-02
 ## Cost
 
 Running 24/7 in eu-central-1 (Price List API, 2026-11-05): RDS ~$14 + storage ~$3 + RDS Proxy ~$26 + NAT ~$38 ≈
-**$81/month** + data transfer (us-east-1 ≈ $69); the actual region and sizes are recorded by T01-06. The AWS Budgets
-alert must exist; stop or remove idle resources ([R-06](../RISKS.md#2-risk-register)).
+**$81/month** + data transfer (us-east-1 ≈ $69); not re-priced for the actual region (ADR-009); the NAT line
+applies only if a NAT gateway exists ([R-09](../RISKS.md#2-risk-register)). The AWS Budgets alert must exist; stop or
+remove idle resources ([R-06](../RISKS.md#2-risk-register)).
 
 ## Open Questions
 

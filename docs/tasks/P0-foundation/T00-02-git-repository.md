@@ -2,7 +2,7 @@
 id: T00-02
 title: "Put the project under Git and push to the remote"
 phase: P0-foundation
-status: Review
+status: Done
 agent: devops
 skills: [devops-engineer]
 depends_on: []
@@ -50,3 +50,5 @@ traceable. Today nothing is under version control, so any lost file is lost for 
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

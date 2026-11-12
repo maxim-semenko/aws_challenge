@@ -1,13 +1,13 @@
 # ARCHITECTURE.md — AWS Challenge
 
-Status: **draft v0.5 (2026-11-12)**. This file holds the system-wide principles, components and ADRs. Decisions
+Status: **draft v0.6 (2026-11-12)**. This file holds the system-wide principles, components and ADRs. Decisions
 marked *Proposed* need the owner's confirmation and are not implemented before that. Feature-level detail lives in
 [design/](design/) (one doc per feature, written before coding), behaviour in [specs/](specs/), open decisions and
 risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
 
-> 2026-11-12: Week 1 was built **manually in the AWS console** by the owner; the actual values (region, network
-> layout, function settings) are recorded by T01-06. AWS changes are made with AWS CLI commands recorded in the task
-> Notes until a dedicated IaC task exists ([Q-12](RISKS.md#q-12), option C). All server-side code is Python
+> 2026-11-12: Week 1 was built **manually in the AWS console** by the owner and accepted; the known facts are in
+> §4. Agents have no AWS access: the owner makes every AWS change in the console from a devops runbook until a
+> dedicated IaC task exists ([Q-12](RISKS.md#q-12), option C; CLAUDE.md §3.11). All server-side code is Python
 > Lambda functions (ADR-015). Sections below describe the target; where a week is not planned yet, the curriculum
 > wins and the detail is decided when that week is planned.
 
@@ -20,7 +20,7 @@ risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
 2. **Private by default:** no public IP for backend resources; the database is reachable only through RDS Proxy.
 3. **Least privilege:** one IAM role per function, scoped to exact resource ARNs.
 4. **Secrets never leave Secrets Manager:** not in code, env var values, logs or Git.
-5. **Reproducible changes:** every AWS change is a replayable AWS CLI runbook in its task Notes now, IaC later
+5. **Reproducible changes:** every AWS change is a console runbook in its task Notes now, IaC later
    ([Q-02](RISKS.md#q-02), T00-03); schema through versioned SQL migrations ([Q-16](RISKS.md#q-16)); code from Git.
 6. **Observable:** one JSON log line per event, correlated across the chain (G8).
 7. **Decide before building:** ADR or design doc first, alternatives with trade-offs, the owner decides.
@@ -48,7 +48,7 @@ Only the current week is planned ([PLAN.md](PLAN.md)); later rows are input for 
 
 | Week | Topic (as given) | State |
 |---|---|---|
-| 1 | Environment: Amplify Hosting + CloudFront; VPC; RDS PostgreSQL **14** + RDS Proxy; three Lambdas (Admin, Chatbot, Sync); `SELECT 1` from Admin; log groups | [requirements](requirements/week-01-environment.md); built manually, acceptance T01-06 |
+| 1 | Environment: Amplify Hosting + CloudFront; VPC; RDS PostgreSQL **14** + RDS Proxy; three Lambdas (Admin, Chatbot, Sync); `SELECT 1` from Admin; log groups | [requirements](requirements/week-01-environment.md); built manually, accepted by the owner 2026-11-12 |
 | 2 | Authorization: Cognito User Pool with Amplify Auth; HTTP API Gateway with JWT authorizer | [requirements](requirements/week-02-authorization.md); planned |
 | 3 | REST API + data: Admin Lambda ↔ RDS Proxy; Sync chain Cognito → **EventBridge** → Lambda | not planned |
 | 4 | Create the `pgvector` extension; a function generates **1536-dimensional** vectors stored in `users.embedding`; similarity query `ORDER BY embedding <-> $1 LIMIT 5`; the Sync Lambda calls Bedrock Titan Embeddings (or Claude 3.5 Sonnet) on insert/update; `ivfflat` or `hnsw` index; check latency on 1000 records | not planned; conflict with ADR-007 → [Q-15](RISKS.md#q-15) |
@@ -82,7 +82,7 @@ flowchart LR
     COG -.->|Week 3: via EventBridge| LS
     U -->|"Authorization: Bearer JWT"| APIGW[API Gateway<br/>HTTP API + JWT authorizer]
 
-    subgraph VPC["VPC — private subnets (layout as built, T01-06)"]
+    subgraph VPC["VPC aws-challenge-vpc — private subnets (§4)"]
         LC[Lambda: chatbot]
         LA[Lambda: admin]
         LS[Lambda: sync]
@@ -124,6 +124,7 @@ Deviations from the curriculum or the challenge diagram:
 
 ### 3.2 Lambda functions (ADR-015)
 All server-side code is Python 3.13 Lambda functions, deployed as zip files; there is no backend application.
+Function names `aws-challenge-<function>` (§4).
 
 | Function | Trigger | Responsibility | From |
 |---|---|---|---|
@@ -150,15 +151,15 @@ The Week 1 code of `chatbot` and `sync` exists only in the AWS console until the
 
 ### 3.4 Cognito User Pool
 - E-mail as the sign-in (username) attribute, e-mail verification by code, default password policy. Registration
-  attributes and their validation: [spec 04](specs/04-user-registration-and-sign-in.md) ([Q-14](RISKS.md#q-14));
-  they are immutable once the pool exists.
-- Public app client (no secret), SRP flow. Tokens: access/ID 60 min, refresh 30 days.
-- Group `admin`, assigned manually with the AWS CLI (`admin-add-user-to-group`).
+  attributes and their validation: [spec 04](specs/04-user-registration-and-sign-in.md) ([Q-14](RISKS.md#q-14)
+  option C: validation only in the SPA, custom attributes without min/max); they are immutable once the pool exists.
+- Public app client (no secret), SRP flow. Tokens: access/ID 60 min, refresh 5 days (as built, T02-01).
+- Group `admin`, members added manually by the owner in the Cognito console.
 - Week 2 uses Cognito as the only profile store (ADR-013); the copy in PostgreSQL arrives with the Week 3 sync chain.
 
 ### 3.5 Data: RDS PostgreSQL + RDS Proxy
 - RDS PostgreSQL **14** (Week 1 curriculum and build; standard support deadline in [R-14](RISKS.md#2-risk-register)),
-  single-AZ, encrypted; instance class and backups as built (recorded by T01-06).
+  single-AZ, encrypted; instance class and backups as built (not recorded yet, §4).
 - RDS Proxy: credentials from Secrets Manager, TLS.
 - Lambda connects **only** to the proxy endpoint, one connection per invocation, opened lazily (not at init).
 - Schema through versioned SQL migrations ([Q-16](RISKS.md#q-16)); the first schema (users table) comes in Week 3.
@@ -172,9 +173,15 @@ The Week 1 code of `chatbot` and `sync` exists only in the AWS console until the
 
 ## 4. Network
 
-As built in Week 1 (manually): layout, subnets, NAT and security groups are recorded by T01-06; the design and the
-security-group matrix live in [design/backend-foundation.md](design/backend-foundation.md). Developer access to the
-database (manual checks): through a Lambda function, or AWS CloudShell in a VPC environment, if ever needed.
+### 4.1 Environment as built
+
+Identifiers and settings of the manually built resources live in [ENVIRONMENT.md](ENVIRONMENT.md).
+
+### 4.2 Design
+
+The design and the security-group matrix live in [design/backend-foundation.md](design/backend-foundation.md).
+Developer access to the database (manual checks): through a Lambda function, or AWS CloudShell in a VPC
+environment (by the owner), if ever needed.
 
 ---
 
@@ -249,7 +256,7 @@ Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in
 |---|---|
 | Latency | `/api/admin/*` p95 < 300 ms warm; search results < 1 s (Week 5) |
 | Timeouts | API Gateway integration 29 s, chatbot Lambda 30 s (Week 5); other functions as built |
-| Lambda | Python 3.13, zip; memory and architecture as built (T01-06), tuned by measurement |
+| Lambda | Python 3.13, zip; memory and architecture as built (§4), tuned by measurement |
 | Cost | learning budget; figures in each design doc's Cost section (Week 1: [backend-foundation](design/backend-foundation.md)); stop or remove idle resources ([R-06](RISKS.md#2-risk-register)) |
 
 ---
@@ -258,15 +265,15 @@ Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in
 
 | ID | Topic | Status | Decision (short) |
 |---|---|---|---|
-| ADR-001 | IaC | **Deferred** | Tool chosen by Q-02 for the later IaC task T00-03; until then AWS CLI runbooks (Q-12 C) |
+| ADR-001 | IaC | **Deferred** | Tool chosen by Q-02 for the later IaC task T00-03; until then console runbooks executed by the owner (Q-12 C) |
 | ADR-002 | Compute model | **Superseded** by ADR-015 | (was: Spring Boot 4 in Lambda) |
 | ADR-003 | API type | **Accepted** (2026-11-12) | HTTP API + JWT authorizer (payload v2) |
-| ADR-004 | Token sent to the API | **Proposed** | Access token, not ID token |
-| ADR-005 | Network | **Superseded** by the Week 1 build | (was: isolated subnets only); layout as built, recorded by T01-06 |
+| ADR-004 | Token sent to the API | **Accepted** (2026-11-12) | Access token, not ID token |
+| ADR-005 | Network | **Superseded** by the Week 1 build | (was: isolated subnets only); layout as built, §4 |
 | ADR-006 | Database access | **Proposed** | RDS Proxy + Secrets Manager secret, TLS; IAM auth later |
 | ADR-007 | Vectors | **Proposed**, challenged by [Q-15](RISKS.md#q-15) | Titan v2, 1024 dims, cosine; HNSW primary, IVFFlat for comparison |
 | ADR-008 | Migrations | **Superseded** by [Q-16](RISKS.md#q-16) | (was: Flyway in a Java `migrate` function) |
-| ADR-009 | Region | **Decided by the Week 1 build** | value to be recorded by T01-06 |
+| ADR-009 | Region | **Decided by the Week 1 build** | `eu-west-1` (Ireland), single region (§4) |
 | ADR-010 | LLM chatbot | **Superseded** by the curriculum (Week 5) | (was: semantic search only, Agent as stretch); Bedrock Agent designed in Week 5 |
 | ADR-011 | User synchronisation | **Rejected** (2026-11-12) | (was: PostConfirmation trigger without EventBridge); the curriculum requires EventBridge, wiring decided in Week 3 |
 | ADR-012 | Log format | **Proposed** | Powertools Logger + Lambda advanced logging controls (JSON), confirmed in Week 6 |
@@ -274,15 +281,15 @@ Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in
 | ADR-014 | SPA auth UI | **Accepted** (2026-11-12) | Own screens on `aws-amplify/auth` APIs; `@aws-amplify/ui-react` removed |
 | ADR-015 | Server code | **Accepted** (2026-11-12) | Python 3.13 Lambda functions, zip deploys, no backend application |
 
-**ADR-001 — IaC (Deferred).** Week 1 was built in the console and Week 2 is built with recorded AWS CLI commands
-(Q-12 C). A dedicated task (T00-03) codifies the existing resources once the tool is chosen in
+**ADR-001 — IaC (Deferred).** Week 1 was built in the console and Week 2 is built by the owner from console runbooks
+(Q-12 C; agents have no AWS access, so IaC code will be deployed by the owner too). A dedicated task (T00-03) codifies the existing resources once the tool is chosen in
 [Q-02](RISKS.md#q-02); importing, not recreating, keeps the Cognito pool and its users.
 
 **ADR-003 — HTTP API (Accepted).** Native Cognito JWT authorizer, ~3.5× cheaper than REST, lower latency. Missing:
 API keys / usage plans, request validation, direct WAF association. The Week 3 wording "REST API" is read as API
 style.
 
-**ADR-004 — Access token (Proposed).** Meant for API authorisation; carries `sub`, `cognito:groups`, `scope`,
+**ADR-004 — Access token (Accepted 2026-11-12, owner).** Meant for API authorisation; carries `sub`, `cognito:groups`, `scope`,
 `client_id`, `username`, `token_use=access`, but no `aud`, `email` or custom attributes. The JWT authorizer's audience
 (= app client id) is matched against `aud` of an ID token and `client_id` of an access token, so **both token types
 pass the authorizer**; the handler therefore rejects `token_use ≠ access` with 401. *Alternative:* ID token — profile

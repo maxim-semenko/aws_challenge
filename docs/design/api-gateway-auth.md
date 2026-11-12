@@ -1,6 +1,6 @@
 # Design — Protected API (HTTP API + Cognito JWT authorizer)
 
-Status: **Draft** — waiting for the owner's acceptance.
+Status: **Accepted** (2026-11-12, owner), with ADR-004.
 Requirements: [week-02](../requirements/week-02-authorization.md) W2-G3, W2-G4, S4, S5, S7 ·
 Spec: [05-protected-api](../specs/05-protected-api.md)
 Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.2, §3.3, §5.2, §6, §8, §9, ADR-003, ADR-004, ADR-015,
@@ -18,16 +18,17 @@ Week 1 `admin` function is a `SELECT 1` probe written in the AWS console, and it
 
 ```mermaid
 flowchart LR
-    SPA[SPA] -->|"GET /api/me, /api/admin/ping<br/>Bearer access token"| API[HTTP API awsch-dev-api<br/>JWT authorizer]
-    API -->|payload v2| ADM[Lambda awsch-dev-admin<br/>Python 3.13]
+    SPA[SPA] -->|"GET /api/me, /api/admin/ping<br/>Bearer access token"| API[HTTP API aws-challenge-api<br/>JWT authorizer]
+    API -->|payload v2| ADM[Lambda aws-challenge-admin<br/>Python 3.13]
     API -.->|JSON access log| CW[CloudWatch Logs]
     ADM -.-> CW
-    CLI["aws lambda invoke {}"] -->|Week 1 probe| ADM
+    CLI["direct invoke {} (console Test)"] -->|Week 1 probe| ADM
 ```
 
-All AWS changes are AWS CLI commands recorded as a runbook in the task Notes (Q-12 C). Code per ADR-015.
+All AWS changes are made by the owner in the console from a devops runbook in the task (Q-12 C, CLAUDE.md §3.11).
+Code per ADR-015.
 
-**HTTP API** `awsch-dev-api` (ADR-003):
+**HTTP API** `aws-challenge-api` (ADR-003):
 
 | Setting | Value |
 |---|---|
@@ -36,11 +37,11 @@ All AWS changes are AWS CLI commands recorded as a runbook in the task Notes (Q-
 | Routes | `GET /api/me` → `admin`; `GET /api/admin/ping` → `admin`; both with the JWT authorizer, no scopes. No `ANY`/`$default` route |
 | Integration | Lambda proxy, payload format 2.0, unqualified function, timeout 29 s (ARCHITECTURE §3.3) |
 | CORS | origins `https://main.<appId>.amplifyapp.com`, `http://localhost:5173`; methods `GET`; headers `authorization`, `content-type`; max age 600 s; no credentials |
-| Access log | log group `/aws/apigateway/awsch-dev-api`, retention 14 days, one JSON line: `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` (`$context.authorizer.claims.sub`) |
+| Access log | log group `/aws/apigateway/aws-challenge-api`, retention 14 days, one JSON line: `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` (`$context.authorizer.claims.sub`) |
 | Invoke permission | `lambda:InvokeFunction` for `apigateway.amazonaws.com`, `SourceArn` = this API's ARN (no wildcard account/API) |
 
-**`admin` function — Python handler (ADR-015).** The current console code is downloaded (`aws lambda
-get-function`, read-only) into the repository under `lambdas/admin/` first, so the probe is preserved and the code is
+**`admin` function — Python handler (ADR-015).** The current console code is exported by the owner (console:
+Actions → Export function → Download deployment package) and copied into the repository under `lambdas/admin/` first, so the probe is preserved and the code is
 in Git from now on. The handler dispatches on the event shape:
 
 - event with `requestContext.http` → API request, dispatched on `routeKey`;
@@ -68,7 +69,7 @@ proxy to `:8080` belonged to the deleted Spring backend and is removed by T02-05
 | Admin check | Route scopes (resource server + custom scope) | enforced by API Gateway | custom scopes only in tokens from the OAuth flow (hosted UI), not from SRP sign-in; per-user scopes need a PreTokenGeneration trigger (Essentials plan) | rejected for Week 2 |
 | Admin check | Lambda authorizer reading groups | enforced at the edge | one more function and cold start per request | rejected |
 | Function for the API | Extend the Week 1 `admin` function (probe kept for direct invokes) | curriculum names Admin Lambda as the API target (Week 3); no new function | two entry shapes in one handler | **proposed** |
-| Function for the API | New function `awsch-dev-api` | single responsibility | a fourth function the curriculum does not have | rejected |
+| Function for the API | New function `aws-challenge-api` | single responsibility | a fourth function the curriculum does not have | rejected |
 | `/api/me` content | Token claims only | no database (Week 3), proves the authorizer and claims path | not the profile | **proposed** (owner decision D5) |
 | Local dev | Direct calls to the dev API with CORS for localhost | no local backend exists (ADR-015) | needs the deployed API | **proposed** |
 | Local dev | Vite proxy `/api` → dev API URL | no CORS locally | hides CORS problems until deployment | alternative |
@@ -85,9 +86,9 @@ has the body `{"message":"Unauthorized"}` (ARCHITECTURE §3.3). No Week 2 endpoi
 
 ## Affected Components
 
-New: HTTP API `awsch-dev-api` with authorizer, routes, stage, access log group (T02-03); `lambdas/admin/` in the
+New: HTTP API `aws-challenge-api` with authorizer, routes, stage, access log group (T02-03); `lambdas/admin/` in the
 repository with the handler and pytest tests (T02-02); skill files `python-lambda` (T02-02) and `http-api-jwt`
-(T02-03). Changed: code of `awsch-dev-admin` (settings unchanged); Amplify env var `VITE_API_URL`.
+(T02-03). Changed: code of `aws-challenge-admin` (settings unchanged); Amplify env var `VITE_API_URL`.
 
 ## Security Considerations
 
@@ -103,10 +104,9 @@ repository with the handler and pytest tests (T02-02); skill files `python-lambd
 ## Cost
 
 No always-on resources. HTTP API: per-request pricing (about $1 per million requests; learning volume ≈ $0).
-Lambda and CloudWatch Logs: within the existing usage. The Week 1 always-on cost (RDS, Proxy, NAT) is unchanged.
+Lambda and CloudWatch Logs: within the existing usage. The Week 1 always-on cost (RDS, Proxy, NAT if any — R-09) is unchanged. No outbound
+AWS call from the function is added, so the missing-NAT question (R-09) does not affect this design.
 
 ## Open Questions
 
-| ID | Question | Recommendation |
-|---|---|---|
-| ADR-004 | Access token for the API (Proposed) | accept together with this design |
+None. ADR-004 (access token to the API) Accepted by the owner 2026-11-12.

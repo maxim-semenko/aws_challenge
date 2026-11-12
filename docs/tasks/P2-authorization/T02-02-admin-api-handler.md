@@ -25,9 +25,10 @@ It is the first Python Lambda task, so it also fixes the repository layout every
 - ADR-015: Python 3.13, zip deploy, no backend application. Directory `lambdas/admin/`; the exact layout
   (handler module, `requirements.txt`, tests, how the zip is built on Windows) is decided here and written into the
   skill file.
-- Start from the current console code: `aws lambda get-function --function-name awsch-dev-admin --profile awsch`
-  (read-only) and download the code; record the runtime, handler name and the probe's dependencies in Notes. Before
-  the code enters the repository, check it for hard-coded secrets or connection strings (CLAUDE.md §7); a finding is
+- Start from the current console code. The agent has no AWS access (CLAUDE.md §3.11): the owner exports the
+  deployment package of `aws-challenge-admin` (console: Actions → Export function → Download deployment package) to a
+  local path outside the repository and reports the runtime, handler and architecture from the console; record them
+  and the probe's dependencies in Notes. Before the code enters the repository, check it for hard-coded secrets or connection strings (CLAUDE.md §7); a finding is
   reported to the owner, not committed.
 - The Week 1 probe behaviour for events without `requestContext.http` stays exactly as it is (spec 02 / AC-05.10).
 - Routes, claim handling, response fields, problem+json bodies, status codes and `detail` texts exactly as spec 05;
@@ -37,7 +38,7 @@ It is the first Python Lambda task, so it also fixes the repository layout every
 - Log fields per spec 05 §Outputs, one JSON line via the standard library (ADR-012); never log the token, e-mail or
   profile values.
 - No new third-party dependency beyond what the probe already uses; tests with `pytest` (ADR-015).
-- Do not deploy; deployment is T02-03.
+- Do not deploy; the owner uploads the zip in T02-03.
 
 ## // SCOPE
 

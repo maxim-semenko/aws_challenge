@@ -20,17 +20,19 @@ someone other than the implementer. The report is what the owner shows to the me
 
 ## // TECHNICAL CONSTRAINTS
 
-- Read-only against AWS: `describe`/`get`/`list`, `lambda invoke` of the `admin` probe with `{}`, `curl`, log
-  queries. Signing up test users through the SPA is allowed (it is the feature under test); no other changes.
-- Each criterion gets pass/fail plus evidence (command and trimmed output); account ids masked; no tokens, passwords
-  or test-user personal data beyond the test e-mail's domain in the report.
+- No AWS access for the agent (CLAUDE.md §3.11). AWS-side ACs are verified from evidence the owner provides
+  (console screenshots, outputs of the `curl` and log searches the owner runs from the tester's checklist); local ACs
+  (AC-04.4, AC-04.10, AC-04.11, AC-05.12: SPA build/tests, pytest, `package.json`) are run by the tester itself.
+  Test users are signed up by the owner through the SPA (the feature under test).
+- Each criterion gets pass/fail plus evidence (source, command or screenshot reference, trimmed output); account ids
+  masked; no tokens, passwords or test-user personal data beyond the test e-mail's domain in the report.
 - A failed criterion is reported back to the owning task, not fixed here.
 
 ## // SCOPE
 
 **Implement**
-- Run every AC of specs 04 and 05 on dev with two fresh test users (one is added to `admin` by the owner);
-  write the report in Notes (table: AC → result → evidence)
+- Checklist for the owner (what to show per AWS-side AC); verify every AC of specs 04 and 05 with two fresh test
+  users (one is added to `admin` by the owner); write the report in Notes (table: AC → result → evidence)
 - Regression: the `admin` probe (AC-05.10) and the spec 01 home page with the new build
 
 **Exclude**

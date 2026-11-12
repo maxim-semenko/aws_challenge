@@ -1,6 +1,6 @@
 # Design — Authentication (Cognito User Pool + Amplify Auth + SPA screens)
 
-Status: **Draft** — waiting for the owner's acceptance and the answer to Q-14.
+Status: **Accepted** (2026-11-12, owner), with ADR-004; Q-14 answered (option C).
 Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, W2-G4 (role), S1–S3 ·
 Spec: [04-user-registration-and-sign-in](../specs/04-user-registration-and-sign-in.md)
 Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.1, §3.4, §5.1, ADR-004, ADR-013, ADR-014, goal G3
@@ -34,7 +34,8 @@ sequenceDiagram
     A-->>B: id, groups (role line)
 ```
 
-**User Pool** (`awsch-dev-users`; created with recorded AWS CLI commands, Q-12 C):
+**User Pool** (`aws-challenge-users`, region per ADR-009; created by the owner in the console from the T02-01
+runbook, Q-12 C):
 
 | Setting | Value |
 |---|---|
@@ -42,21 +43,21 @@ sequenceDiagram
 | Sign-in | e-mail is the username attribute (`UsernameAttributes=[email]`), case-insensitive |
 | Self sign-up | enabled; verification of `email` by code (`AutoVerifiedAttributes=[email]`) |
 | Password policy | Cognito default (ARCHITECTURE §3.4) |
-| Attributes | schema and validation rules per [Q-14](../RISKS.md#q-14) (proposed option A); field list in spec 04 §Inputs |
+| Attributes | [Q-14](../RISKS.md#q-14) option C: required standard attributes, custom attributes without min/max constraints, validation only in the SPA; field table in spec 04 §Inputs |
 | E-mail sender | Cognito default sender ([R-13](../RISKS.md#2-risk-register)) |
 | MFA, social logins, hosted UI | off (out of scope, ARCHITECTURE §1) |
 | Deletion protection | on (the schema is immutable; an accidental delete loses every user) |
 | Group | `admin` |
 | Lambda triggers | none in Week 2 (the sync chain is Week 3) |
 
-**App client** `awsch-dev-spa`: public (no secret); auth flows `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`;
+**App client** `aws-challenge-frontend-spa`: public (no secret); auth flows `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`;
 prevent user existence errors on; token validity per ARCHITECTURE §3.4; read and write permission on every
 registration attribute (write is needed by `SignUp`, read by `fetchUserAttributes`; consequence
 [R-12](../RISKS.md#2-risk-register)).
 
-**First administrator:** the owner signs up through the SPA (or `aws cognito-idp sign-up` + `confirm-sign-up` if the
-screens are not ready yet), then the devops agent runs `aws cognito-idp admin-add-user-to-group --group-name admin`
-with profile `awsch` (T02-03). The group appears in tokens after the next sign-in or token refresh.
+**First administrator:** the owner signs up through the SPA (or creates the user in the Cognito console if the
+screens are not ready yet), then adds it to the group `admin` in the Cognito console (T02-03 runbook). The group
+appears in tokens after the next sign-in or token refresh.
 
 **SPA (ADR-014):** own screens on `aws-amplify/auth`; `@aws-amplify/ui-react` removed. No styling beyond semantic
 HTML until the design system exists (CLAUDE.md §5).
@@ -70,8 +71,7 @@ HTML until the design system exists (CLAUDE.md §5).
 | `/me` | signed in | personal page: the 8 fields from `fetchUserAttributes`, date shown as `DD/MM/YYYY`, role line from `GET /api/me`, read-only |
 | other existing routes (`/chat`, `/admin`) | unchanged in Week 2 | — |
 
-- Amplify is configured once at start-up from `VITE_AWS_REGION`, `VITE_COGNITO_USER_POOL_ID`,
-  `VITE_COGNITO_USER_POOL_CLIENT_ID`; with empty values auth routes are hidden and the home page still renders
+- Amplify is configured once at start-up from the `VITE_*` variables of spec 04 §Inputs; with empty values auth routes are hidden and the home page still renders
   (spec 01).
 - A route guard checks the session (`fetchAuthSession` / `getCurrentUser`); an anonymous visit to `/me` redirects to
   `/sign-in` and back after sign-in. After sign-in the user lands on `/me`.
@@ -92,8 +92,10 @@ HTML until the design system exists (CLAUDE.md §5).
 | Personal page data | `GET /api/me` from a PostgreSQL copy | one read path for user and admin | the copy is Week 3 (curriculum) | moved to Week 3 (ADR-013) |
 | Role on the personal page | `groups` from `GET /api/me` | exercises the protected API from the SPA | page depends on the API for one line | **proposed** |
 | Role on the personal page | `cognito:groups` from the access token in the SPA | no API call | the SPA never calls the API in Week 2 | alternative |
-| Server-side field validation | Q-14 A / B / C | — | — | owner decides in Q-14 |
-| Country attribute | `custom:country` (ISO alpha-2) | simple, constrained length | custom attribute, immutable | **proposed** |
+| Field validation (Q-14) | A: SPA + min/max constraints on the custom attributes in Cognito | Cognito rejects out-of-range custom values | ranges frozen with the pool; `gender`/`birthdate` still unchecked server-side | rejected |
+| Field validation (Q-14) | B: A + PreSignUp Lambda trigger validating every field | true server-side validation | extra synchronous trigger (5 s limit) and function, beyond the week topic | rejected |
+| Field validation (Q-14) | C: SPA only; custom attributes without min/max in Cognito | ranges can change later without a new pool | no server-side bound at all (§Security Considerations) | **accepted** (owner, 2026-11-12) |
+| Country attribute | `custom:country` (ISO alpha-2) | simple | custom attribute, immutable; length not constrained (Q-14 C) | **accepted** |
 | Country attribute | standard `address` (JSON `country` field) | standard claim | JSON string, no length constraint | rejected |
 
 ## API Design
@@ -101,8 +103,7 @@ HTML until the design system exists (CLAUDE.md §5).
 No HTTP endpoint is defined here (see [api-gateway-auth](api-gateway-auth.md)). Cognito operations used by the SPA
 through `aws-amplify/auth`: `signUp`, `confirmSignUp`, `resendSignUpCode`, `signIn`, `signOut`, `fetchAuthSession`,
 `getCurrentUser`, `fetchUserAttributes`. Field names, types, ranges and the mapping to Cognito attributes: spec 04
-§Inputs. Amplify Hosting environment variables: `VITE_AWS_REGION`, `VITE_COGNITO_USER_POOL_ID`,
-`VITE_COGNITO_USER_POOL_CLIENT_ID`, `VITE_API_URL` (public identifiers, no secrets).
+§Inputs. Amplify Hosting environment variables: spec 04 §Inputs "Configuration" (public identifiers, no secrets).
 
 ## Affected Components
 
@@ -116,10 +117,14 @@ deleted local backend), Amplify Hosting environment variables.
 - Public app client without secret; SRP — the password never leaves the browser in clear.
 - Tokens are held by Amplify in browser storage (default `localStorage`): any XSS can read them. Mitigation in Week 2:
   no `dangerouslySetInnerHTML`, no third-party scripts; CSP is a later item.
-- Client-side validation is a convenience, not a control; server-side guarantees per Q-14.
+- Field validation exists only in the SPA (Q-14 C): Cognito checks no range or format of `gender`, `birthdate` or the
+  custom attributes, and custom attributes cannot be required. A direct call to the public `SignUp` (or
+  `UpdateUserAttributes`) API with the app client id can therefore store out-of-range values or omit custom
+  attributes. Accepted for Week 2; the personal page shows stored values as they are (spec 04), and the Week 3 sync
+  must tolerate such values ([R-11, R-12](../RISKS.md#2-risk-register)).
 - Profile data (name, gender, birth date, country, height, weight) is personal data: it stays in Cognito and the
   browser; the SPA never logs tokens or profile data to the console.
-- `admin` membership only via the AWS CLI by the owner; the SPA never decides authorisation (the API does; the role
+- `admin` membership only by the owner in the Cognito console; the SPA never decides authorisation (the API does; the role
   line is display only).
 - User existence errors are suppressed for sign-in; sign-up still reports an existing e-mail (Cognito behaviour) —
   accepted.
@@ -132,7 +137,4 @@ creation); the learning workload stays far below. Default e-mail sender: no char
 
 ## Open Questions
 
-| ID | Question | Recommendation |
-|---|---|---|
-| [Q-14](../RISKS.md#q-14) | Attribute schema and validation ranges (immutable) | option A with the table in Q-14 |
-| ADR-004 | Access token for the API (Proposed) | accept together with this design |
+None. Resolved 2026-11-12 by the owner: [Q-14](../RISKS.md#q-14) (option C), ADR-004 (Accepted).

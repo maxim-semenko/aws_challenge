@@ -14,8 +14,8 @@ without long-lived keys in the repository.
 |---|---|---|---|
 | AWS account | existing account | root user not used for daily work | yes |
 | Profile name | string | `awsch` | yes |
-| Region | string | region of the Week 1 build (Q-03, recorded by T01-06) | yes |
-| SDK scope | Q-11 (as configured by the owner, recorded by T01-06) | JS SDK v3 and/or boto3 (Python) | yes |
+| Region | string | region of the Week 1 build (ADR-009) | yes |
+| SDK scope | Q-11 (as configured by the owner on the owner's machine; agents have no AWS access, CLAUDE.md §3.11) | JS SDK v3 and/or boto3 (Python) | yes |
 
 ## Outputs
 

@@ -2,7 +2,7 @@
 id: T01-04
 title: "Compute: three functions, roles, log groups"
 phase: P1-environment
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect]
 depends_on: [T01-02]
@@ -27,7 +27,7 @@ investigated (S7).
 
 ## // TECHNICAL CONSTRAINTS
 
-- Python runtime (version, architecture, memory and timeout as built, recorded by T01-06; target Python 3.13 per
+- Python runtime (version, architecture, memory and timeout as built (ARCHITECTURE §4); target Python 3.13 per
   ADR-015), private subnets + `sg-lambda`.
 - One IAM role per function: `AWSLambdaVPCAccessExecutionRole` + `secretsmanager:GetSecretValue` on the DB secret ARN
   only. No wildcard resources.
@@ -45,7 +45,7 @@ investigated (S7).
 - API Gateway, `migrate` function, bringing the code into Git (`admin`: T02-02)
 
 **Interfaces that must match**
-- Function names `awsch-dev-admin`, `awsch-dev-chatbot`, `awsch-dev-sync` (actual names recorded by T01-06).
+- Function names per ARCHITECTURE §4 (`aws-challenge-<function>`).
 
 ## Definition of Done
 
@@ -54,3 +54,5 @@ investigated (S7).
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

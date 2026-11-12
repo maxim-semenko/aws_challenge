@@ -2,7 +2,7 @@
 id: T01-06
 title: "Week 1 acceptance check and record of the manual build"
 phase: P1-environment
-status: Todo
+status: Done
 agent: tester
 skills: [test-master]
 depends_on: []  # verifies the manually built environment; the Week 1 build tasks are in Review until this report exists (Q-12)
@@ -54,3 +54,6 @@ recorded by T01-06", and Week 2 tasks need region, names and ARNs. The report is
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.
+- 2026-11-12: no AC-by-AC report was produced by the tester; the owner accepted Week 1 on own evidence. Network facts from the screenshot are recorded once in ARCHITECTURE §4; the other facts listed in SCOPE are supplied by the owner when a task needs them. Scope items of the build tasks not produced (skill files, README section) are waived by the acceptance unless the owner reopens them.

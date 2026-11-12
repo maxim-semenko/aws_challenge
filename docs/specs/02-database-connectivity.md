@@ -50,11 +50,11 @@ Manager, and that every function logs to CloudWatch.
 
 ## Acceptance Criteria
 
-- [ ] AC-02.1 VPC has private subnets for Lambda, Proxy and RDS (layout as built, Q-08 closed, recorded by T01-06); Lambda, Proxy and RDS have no public IP
+- [ ] AC-02.1 VPC has private subnets for Lambda, Proxy and RDS (layout as built, Q-08 closed, ARCHITECTURE §4); Lambda, Proxy and RDS have no public IP
 - [ ] AC-02.2 RDS has `PubliclyAccessible=false`; `sg-db` inbound only from `sg-proxy`; `sg-proxy` inbound only from `sg-lambda`
 - [ ] AC-02.3 `aws rds describe-db-proxy-targets` shows the instance as `AVAILABLE`
 - [ ] AC-02.4 `admin`, `chatbot`, `sync` exist with `VpcConfig` = the private subnets + `sg-lambda`, each with its own role
-- [ ] AC-02.5 `aws lambda invoke --function-name awsch-dev-admin` returns `{"result":1,…}`
+- [ ] AC-02.5 A direct invoke of `aws-challenge-admin` with `{}` returns `{"result":1,…}`
 - [ ] AC-02.6 RDS Proxy metric `ClientConnections` > 0 at the time of the invocation
 - [ ] AC-02.7 Each function has a log group with retention ≥ 7 days (S7), containing the JSON log line
 - [ ] AC-02.8 No secret value in code, function configuration, logs or Git

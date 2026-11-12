@@ -2,7 +2,7 @@
 id: T01-05
 title: "Hosting stack: Amplify app connected to Git"
 phase: P1-environment
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, devops-engineer]
 depends_on: [T00-02, T00-04]
@@ -52,3 +52,5 @@ W1-G1: users open the SPA over HTTPS through CloudFront, and every push to `main
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

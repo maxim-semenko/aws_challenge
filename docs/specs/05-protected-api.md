@@ -14,7 +14,7 @@ data.
 
 | Name | Type | Valid range | Required |
 |---|---|---|---|
-| `Authorization` header | string | `Bearer <JWT>` issued by `awsch-dev-users` for app client `awsch-dev-spa`, not expired, `token_use=access` | yes (both routes) |
+| `Authorization` header | string | `Bearer <JWT>` issued by `aws-challenge-users` for app client `aws-challenge-frontend-spa`, not expired, `token_use=access` | yes (both routes) |
 | `GET /api/me` | request | no body, no query parameters (any are ignored) | — |
 | `GET /api/admin/ping` | request | no body, no query parameters (any are ignored) | — |
 | `Origin` header | string | `https://main.<appId>.amplifyapp.com` or `http://localhost:5173` for CORS | no |
@@ -51,7 +51,7 @@ Log lines:
 
 | Source | Fields | Never contains |
 |---|---|---|
-| API access log `/aws/apigateway/awsch-dev-api` | `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` | token, `Authorization` header |
+| API access log `/aws/apigateway/aws-challenge-api` | `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` | token, `Authorization` header |
 | `admin` handler, one line per API request | `level`, `message`, `awsRequestId`, `apiRequestId`, `userSub`, `routeKey`, `status`, `durationMs` | token, e-mail, names, any profile value |
 
 ## Behaviour
@@ -64,7 +64,7 @@ Log lines:
 4. `GET /api/me`: builds the response from the claims only; no database or AWS call.
 5. `GET /api/admin/ping`: groups parsed from the claim; contains `admin` → 200, else 403. No database or AWS call.
 6. The handler writes one log line; `apiRequestId` (`requestContext.requestId`) equals the access-log `requestId`.
-7. An event without `requestContext.http` (direct `aws lambda invoke` with `{}`) runs the existing Week 1 probe
+7. An event without `requestContext.http` (direct invoke with `{}`, e.g. the console Test tab) runs the existing Week 1 probe
    unchanged (spec 02).
 
 ## Edge Cases / Failure Modes
@@ -84,9 +84,12 @@ Log lines:
 
 ## Acceptance Criteria
 
-- [ ] AC-05.1 `aws apigatewayv2 get-apis` shows `awsch-dev-api` with `ProtocolType=HTTP`; `get-authorizers` shows one
-  JWT authorizer with the pool issuer URL and audience = app client id
-- [ ] AC-05.2 `get-routes` shows exactly `GET /api/me` and `GET /api/admin/ping`, each with `AuthorizationType=JWT`;
+AWS-side criteria are verified from evidence the owner provides (console screenshots, or outputs of the `curl`/AWS
+commands the owner runs); agents have no AWS access (CLAUDE.md §3.11). AC-05.12 is verified locally.
+
+- [ ] AC-05.1 The API `aws-challenge-api` exists with protocol HTTP and one JWT authorizer with the pool issuer URL
+  and audience = app client id
+- [ ] AC-05.2 The routes are exactly `GET /api/me` and `GET /api/admin/ping`, each with `AuthorizationType=JWT`;
   no `ANY` or `$default` route
 - [ ] AC-05.3 `curl` to both routes without a token, with a malformed token and with an expired token → 401
 - [ ] AC-05.4 `GET /api/me` with a valid access token → 200; `id` equals the token's `sub`, `groups` equals its
@@ -99,9 +102,9 @@ Log lines:
 - [ ] AC-05.8 The access log group exists with retention 14 days and contains a JSON line for each call of AC-05.3/05.4
   with `status` and `requestId`; the `admin` log line for the AC-05.4 call has the same `apiRequestId` and a `userSub`
 - [ ] AC-05.9 A search of both log groups for the string `eyJ` (JWT prefix) and for the test user's e-mail finds nothing
-- [ ] AC-05.10 `aws lambda invoke --function-name awsch-dev-admin` with `{}` returns the same probe result as before
-  the deploy (recorded in T02-03 Notes)
-- [ ] AC-05.11 The Lambda resource policy of `awsch-dev-admin` allows `apigateway.amazonaws.com` only with `SourceArn`
-  of `awsch-dev-api`; the role of `awsch-dev-admin` has no permission added in Week 2
+- [ ] AC-05.10 A direct invoke of `aws-challenge-admin` with `{}` returns the same probe result as before the deploy
+  (recorded in T02-03 Notes)
+- [ ] AC-05.11 The Lambda resource policy of `aws-challenge-admin` allows `apigateway.amazonaws.com` only with a
+  `SourceArn` of `aws-challenge-api`; the role of `aws-challenge-admin` has no permission added in Week 2
 - [ ] AC-05.12 pytest unit tests of the handler cover: `token_use` check, missing claims, group parsing (absent,
   string form, JSON array), 200/401/403/404 mapping, the problem+json body and the `{}` probe dispatch

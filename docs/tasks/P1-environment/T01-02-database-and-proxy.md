@@ -2,7 +2,7 @@
 id: T01-02
 title: "Data stack: RDS PostgreSQL, secret, RDS Proxy"
 phase: P1-environment
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, postgres-pro]
 depends_on: [T01-01]
@@ -52,3 +52,5 @@ and the proxy are the biggest Week 1 cost (~$40/month), so the stack must be che
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12: `Done` — accepted by the owner (evidence: owner's statement + VPC console screenshot; facts in [ARCHITECTURE §4](../../ARCHITECTURE.md#4-network)); built manually; agents have no AWS access.

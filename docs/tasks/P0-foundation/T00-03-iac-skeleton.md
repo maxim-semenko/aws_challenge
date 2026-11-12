@@ -14,7 +14,7 @@ acceptance: [AC-01.4, AC-02.9]
 # T00-03 — Codify the manually built resources in IaC
 
 > **BLOCKED** by [Q-02](../../RISKS.md#q-02). Re-scoped 2026-11-12 by Q-12 (option C): Week 1 was built manually
-> and Week 2 is built with recorded AWS CLI runbooks; this is the later dedicated IaC task. The scope below is
+> and Week 2 is built by the owner from console runbooks; this is the later dedicated IaC task. The scope below is
 > refined (and Week 2 resources added) when Q-02 is answered and the task is planned.
 
 ## // BUSINESS CONTEXT
@@ -26,12 +26,12 @@ minutes (R-06), and so that console edits stop drifting from what the repository
 
 - Tool per Q-02 (recommended: AWS CDK in Python, same language as the Lambdas).
 - **Import** existing resources, do not recreate them: the Cognito User Pool cannot be recreated without losing its
-  users, and recreating RDS/Proxy changes endpoints. Input: the facts recorded by T01-06 and the runbooks in the
-  Week 2 devops task Notes.
+  users, and recreating RDS/Proxy changes endpoints. Input: ARCHITECTURE §4, the owner's evidence and the runbooks
+  in the Week 2 devops task Notes.
 - Account, region and environment come from configuration, never from code. Naming and tags per CLAUDE.md §7,
   applied in one place.
 - Policy checks (e.g. cdk-nag) on `synth`; suppressions need a written reason. No secrets in context files.
-- Show every plan/diff to the owner and wait for the go-ahead before any deploy (CLAUDE.md §3.8).
+- The agent has no AWS access (CLAUDE.md §3.11): the owner runs every synth-against-account, diff, import and deploy.
 
 ## // SCOPE
 
@@ -44,7 +44,7 @@ minutes (R-06), and so that console edits stop drifting from what the repository
 - New resources or behaviour changes; Week 2 resources until the task is refined
 
 **Interfaces that must match**
-- Resource names and settings exactly as recorded by T01-06.
+- Resource names and settings exactly as built (ARCHITECTURE §4 and the owner's evidence).
 
 ## Definition of Done
 
