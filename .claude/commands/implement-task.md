@@ -1,6 +1,6 @@
 ---
 description: Implement one task from docs/tasks by delegating it to the agent named in its front matter
-argument-hint: <task ID, e.g. T01-03>
+argument-hint: <task ID, e.g. T02-02>
 ---
 
 Implement task `$ARGUMENTS`.

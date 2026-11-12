@@ -16,8 +16,8 @@ your checklist.
 - For each AC record: result (pass / fail / not verifiable), the exact command, trimmed output. Mask account ids;
   never print secrets.
 - A failure is reported against the task that owns it (task ID + AC); do not change code or infrastructure.
-- Use skills `test-master` and `playwright-expert` for method; backend tests are JUnit 5 + Testcontainers
-  (CLAUDE.md overrides the skills' JS/Python examples).
+- Use skills `test-master` and `playwright-expert` for method; Lambda tests are pytest (CLAUDE.md overrides the
+  skills' examples).
 - Do not commit or push unless the owner explicitly asks.
 
 ## Output

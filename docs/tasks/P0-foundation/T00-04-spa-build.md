@@ -23,12 +23,12 @@ page and W1-G1 fails.
 
 - React 19 + Vite + strict TypeScript; configuration only from `VITE_*`.
 - Change only what blocks the build or the render without configuration — no new features, no redesign.
-- Pre-task invariants from CLAUDE.md: `npm run lint` and `npm run build` green; CSS bundle size check.
+- Pre-task invariants from CLAUDE.md: `npm run build` green.
 
 ## // SCOPE
 
 **Implement**
-- `npm ci && npm run lint && npm run build` green
+- `npm ci && npm run build` green
 - Home page renders with all `VITE_*` empty (auth UI hidden, no runtime error in the console)
 
 **Exclude**
@@ -39,7 +39,7 @@ page and W1-G1 fails.
 
 ## Definition of Done
 
-- [ ] Lint and build green; `npm run preview` with an empty `.env` shows the home page and `/chat` reload works
+- [ ] Build green; `npm run preview` with an empty `.env` shows the home page and `/chat` reload works
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
@@ -49,3 +49,5 @@ page and W1-G1 fails.
   `tsc -b` and `vite build` green. Open: (1) `npm run lint` fails — oxlint 1.89 needs Node ≥ 22.12, local Node is
   22.11.0, so npm skipped the optional `@oxlint/binding-win32-x64-msvc`; (2) CSS budget violated: 317 410 bytes,
   mostly `@aws-amplify/ui-react` styles (limit 10 240); (3) JS bundle 811 kB (Vite chunk-size warning).
+- 2026-11-12 (owner): oxlint and the CSS budget removed from the project, so open items (1) and (2) no longer
+  apply. `npm run build` green on Node 22.11.0 after removing oxlint.

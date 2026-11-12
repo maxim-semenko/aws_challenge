@@ -2,18 +2,21 @@
 id: T00-01
 title: "AWS account, budget and local CLI/SDK access"
 phase: P0-foundation
-status: Blocked
+status: Review
 agent: devops
 skills: [cloud-architect]
 depends_on: []
-blocked_by: [Q-03, Q-11]
+blocked_by: []
 design: null  # account setup, no product feature
 spec: ../../specs/03-local-aws-access.md
 acceptance: [AC-03.1, AC-03.2, AC-03.3, AC-03.4]
 ---
 # T00-01 — AWS account, budget and local CLI/SDK access
 
-> **BLOCKED** by [Q-03](../../RISKS.md#q-03), [Q-11](../../RISKS.md#q-11).
+> **2026-11-12 — built manually by the owner** in the AWS console ([Q-12](../../RISKS.md#q-12), option C).
+> T01-06 records the facts of the build and verifies the ACs; the owner sets `Done` from that evidence.
+> Constraints and ACs that assume IaC are deferred to T00-03. Scope items the manual build did not produce
+> (e.g. the skill file) appear as open items in T01-06; the owner waives them or asks devops to deliver them.
 
 ## // BUSINESS CONTEXT
 

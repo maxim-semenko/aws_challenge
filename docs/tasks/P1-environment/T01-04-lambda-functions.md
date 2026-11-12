@@ -1,17 +1,23 @@
 ---
 id: T01-04
-title: "Compute stack: three functions, roles, log groups"
+title: "Compute: three functions, roles, log groups"
 phase: P1-environment
-status: Todo
+status: Review
 agent: devops
 skills: [cloud-architect]
-depends_on: [T01-02, T01-03]
+depends_on: [T01-02]
 blocked_by: []
 design: ../../design/backend-foundation.md
 spec: ../../specs/02-database-connectivity.md
 acceptance: [AC-02.4, AC-02.5, AC-02.6, AC-02.7]
 ---
-# T01-04 — Compute stack: three functions, roles, log groups
+# T01-04 — Compute: three functions, roles, log groups
+
+> **2026-11-12 — built manually by the owner** in the AWS console ([Q-12](../../RISKS.md#q-12), option C), with the
+> function code written in Python in the console (Q-10 closed, ADR-015; the Java handler task T01-03 was deleted as
+> obsolete). T01-06 records the facts of the build and verifies the ACs; the owner sets `Done` from that evidence.
+> Scope items the manual build did not produce (e.g. the skill file) appear as open items in T01-06; the owner waives
+> them or asks devops to deliver them.
 
 ## // BUSINESS CONTEXT
 
@@ -21,24 +27,25 @@ investigated (S7).
 
 ## // TECHNICAL CONSTRAINTS
 
-- Runtime `java21`, arm64, 512 MB, timeout 15 s, private subnets + `sg-lambda`.
+- Python runtime (version, architecture, memory and timeout as built, recorded by T01-06; target Python 3.13 per
+  ADR-015), private subnets + `sg-lambda`.
 - One IAM role per function: `AWSLambdaVPCAccessExecutionRole` + `secretsmanager:GetSecretValue` on the DB secret ARN
   only. No wildcard resources.
-- Log groups `/aws/lambda/<name>` created by IaC **before** the functions, retention 14 days.
-- Env vars `DB_PROXY_ENDPOINT`, `DB_NAME`, `DB_SECRET_ARN` from T01-02 outputs; no secret values.
+- Log groups `/aws/lambda/<name>`, retention ≥ 7 days (S7; 14 days proposed).
+- Env vars `DB_PROXY_ENDPOINT`, `DB_NAME`, `DB_SECRET_ARN` (spec 02); no secret values.
 
 ## // SCOPE
 
 **Implement**
-- Functions, roles, log groups from the T01-03 zip
-- Deploy and invoke each function once; invoke `admin` and record response, log line and proxy `ClientConnections`
+- Functions, roles, log groups; `admin` runs the `SELECT 1` probe, `chatbot` and `sync` log and return
+- Invoke each function once; invoke `admin` and record response, log line and proxy `ClientConnections`
 - Skill file `lambda-functions` (runtime, roles, log groups, how to add a function; skills ownership rule)
 
 **Exclude**
-- API Gateway, SnapStart/aliases, `migrate` function, Spring artifact
+- API Gateway, `migrate` function, bringing the code into Git (`admin`: T02-02)
 
 **Interfaces that must match**
-- Function names `awsch-dev-admin`, `awsch-dev-chatbot`, `awsch-dev-sync`.
+- Function names `awsch-dev-admin`, `awsch-dev-chatbot`, `awsch-dev-sync` (actual names recorded by T01-06).
 
 ## Definition of Done
 

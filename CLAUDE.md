@@ -22,12 +22,12 @@ Rules here override any skill or agent file.
 
 ## 2. Role and goal
 
-Senior Java architect (AWS, Spring, serverless) responsible for the integrity of the solution. Proposes decisions
-with rationale and alternatives; the project owner (Max) decides.
+Senior cloud architect (AWS serverless, Python Lambda, React) responsible for the integrity of the solution. Proposes
+decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (now: Week 1 — environment setup).
+planned** (now: Week 2 — authorization).
 
 ## 3. Working rules (mandatory)
 
@@ -51,24 +51,25 @@ planned** (now: Week 1 — environment setup).
 
 | Area | Choice | Status |
 |---|---|---|
-| Build | Java 21 (toolchain), Gradle Wrapper 9.8.2 — Gradle only, no Maven | accepted |
-| Backend framework | Spring Boot 4.0.x in Lambda via `aws-serverless-java-container-springboot4` (ADR-002); profiles `local` (no AWS) and `lambda` | Proposed; Week 1 handlers per Q-10 |
-| AWS SDK | Java 2.x (`software.amazon.awssdk`); JS SDK v3 only through `aws-amplify` | accepted |
-| Database | PostgreSQL + pgvector, vector dimension 1024 (ADR-007); Flyway migrations | major version pending Q-09 (proposed 17) |
-| Frontend | React 19, Vite 6, TypeScript 5.8 strict, React Router 7, TanStack Query 5, `aws-amplify` 6, oxlint — Vite SPA, no Next.js / Server Components | accepted |
-| IaC | AWS CDK v2 in Java, module `infra` (ADR-001) | pending Q-02 |
-| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; later Cognito, HTTP API, Bedrock | region pending Q-03 |
-| Tests | JUnit 5 + Testcontainers (backend); Playwright for E2E (planned) | — |
-| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Docker Desktop, AWS CLI v2 profile `awsch` | — |
+| Server code | Python 3.13 AWS Lambda functions `admin`, `chatbot`, `sync`, zip deploys, one directory per function under `lambdas/`; no backend application (ADR-015) | accepted |
+| Lambda libraries | `boto3` (runtime), `pg8000`, Powertools for AWS Lambda (Python) Logger from Week 6, `pytest` | proposed in ADR-015 |
+| AWS SDK | `boto3` in Lambdas; JS SDK v3 only through `aws-amplify` | accepted |
+| Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, dimension per ADR-007 / Q-15; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
+| Frontend | React 19, Vite 6, TypeScript 5.8 strict, React Router 7, TanStack Query 5, `aws-amplify` 6 — Vite SPA, no Next.js / Server Components; npm (Gradle Wrapper 9.8.2 only wraps the npm scripts in `frontend/build.gradle`) | accepted |
+| AWS changes | AWS CLI commands recorded as a runbook in the task Notes (Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (runbooks); IaC pending Q-02 |
+| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region as built (Q-03 closed, value recorded by T01-06) |
+| Tests | `pytest` (Lambdas); frontend test runner introduced by the first task that needs one; Playwright for E2E (planned) | — |
+| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from T02-02), Docker Desktop, AWS CLI v2 profile `awsch` | — |
 
-Exact library versions live in `backend/build.gradle` and `frontend/package.json`, nowhere else.
+Exact library versions live in each `lambdas/<function>/requirements.txt` and in `frontend/package.json`, nowhere
+else.
 
 ## 5. Design (styles) system
 
 **Pending — no screens have been provided yet.** When screens arrive, the tokens are defined in the table below;
 the only other place allowed to contain their values is the single generated file `frontend/src/styles/tokens.css`.
 Known violation: the Vite template colours in `frontend/src/index.css` are a placeholder and are removed by the task
-that introduces the design system. Week 1 needs no styling.
+that introduces the design system. Weeks 1 and 2 need no styling.
 
 | Token group | Values |
 |---|---|
@@ -76,7 +77,7 @@ that introduces the design system. Week 1 needs no styling.
 
 ## 6. Frontend ↔ backend contract conventions
 
-Week 1 has no HTTP API. These conventions apply from the first endpoint on; the endpoint list lives in
+The first endpoints come in Week 2. These conventions apply to every endpoint; the endpoint list lives in
 ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) and the spec (Inputs/Outputs).
 
 - **Style:** REST over HTTPS, JSON (`application/json`, UTF-8), all paths under `/api`, no version segment in the
@@ -94,13 +95,18 @@ ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) a
 
 ## 7. Conventions
 
-- **Java:** records for DTOs; constructor injection; `@Transactional` on services only; Spring Boot 4 test
-  annotations (`@MockitoBean`, not `@MockBean`).
-- **Secrets:** only in AWS Secrets Manager; never in code, `application*.properties`, env var values, logs or Git.
-- **Database:** schema only via Flyway (`V<n>__<description>.sql`), `ddl-auto=none`.
+- **Python (Lambdas):** Python 3.13 with type hints; one directory per function `lambdas/<function>/` with its own
+  pinned `requirements.txt` (pure-Python packages, so a zip built on Windows runs on Lambda); handler entry point
+  `lambda_handler(event, context)`; clients and config at module level, no network call or DB connection at init;
+  parameterised SQL only; pytest with AWS and database access replaced by test doubles. Layout details and commands:
+  the `python-lambda` skill (created by T02-02).
+- **Secrets:** only in AWS Secrets Manager; never in code, config files, env var values, logs or Git.
+- **Database:** schema only via versioned SQL migrations `V<n>__<description>.sql` (tool per Q-16); no schema
+  changes by hand.
 - **Logging:** one JSON object per line; correlation fields `awsRequestId`, `apiRequestId`, `userSub`. Never log
   tokens, passwords, connection strings with credentials or full user queries (length/hash only).
-- **AWS resources:** names `awsch-<env>-<name>`; tags `project`, `env`, `owner`; everything through IaC.
+- **AWS resources:** names `awsch-<env>-<name>`; tags `project`, `env`, `owner`; every change as a recorded AWS CLI
+  runbook in the task Notes until IaC exists (T00-03); no console code edits of a function whose code is in Git.
 - **Frontend:** strict TypeScript, server data through TanStack Query, configuration only via `VITE_*`.
 
 ### Commit format
@@ -120,10 +126,10 @@ A task goes to `Review` only if all that apply hold (state "not verified" for an
 
 | Invariant | Check | Applies to |
 |---|---|---|
-| Build green | `./gradlew :<module>:build` for each affected module (the `backend` draft is excluded until it is reviewed, R-04); `cd frontend && npm run lint && npm run build` | any code change |
-| Tests green | unit + integration tests of the affected modules | any code change |
-| CSS budget | every `frontend/dist/assets/*.css` raw file size ≤ 10 240 bytes | frontend changes |
-| IaC check | `cdk synth` with cdk-nag, no unexplained suppressions | infra changes |
+| Build green | each affected `lambdas/<function>`: zip packaging per the `python-lambda` skill; `cd frontend && npm run build` (includes `tsc -b`) | any code change |
+| Tests green | `pytest` of each affected function; frontend tests where they exist | any code change |
+| Runbook | every AWS change recorded as replayable AWS CLI commands with verify commands in the task Notes | AWS changes |
+| IaC check | `synth` with policy checks, no unexplained suppressions | once IaC exists (T00-03) |
 | E2E gate | Playwright suite green against `dev` | once the suite exists (not in Week 1) |
 | Skill file | added/updated per the skills ownership rule (§8) | new dependency, interface or schema |
 | Acceptance | the task's ACs from its spec verified, evidence in the task Notes | every task |
@@ -138,8 +144,8 @@ A task goes to `Review` only if all that apply hold (state "not verified" for an
 
 ## 8. Agents, skills, commands
 
-Agents: `architect` (design, ADRs, reviews), `backend` (Java code), `frontend` (`frontend/`), `tester` (acceptance,
-E2E), `devops` (IaC, AWS account, Git, CI/CD, hosting). Their skills are listed in each agent's front matter; a task
+Agents: `architect` (design, ADRs, reviews), `backend` (Python Lambda code in `lambdas/`), `frontend` (`frontend/`),
+`tester` (acceptance, E2E), `devops` (AWS CLI runbooks, later IaC, AWS account, Git, CI/CD, hosting). Their skills are listed in each agent's front matter; a task
 may add skills in its own front matter.
 
 Skills in `.claude/skills/` are copied from [jeffallan/claude-skills](https://github.com/jeffallan/claude-skills)
@@ -147,13 +153,12 @@ Skills in `.claude/skills/` are copied from [jeffallan/claude-skills](https://gi
 Spring Cloud, replication) were removed, the rest is kept as is.
 
 **Project overrides — they win over any skill text:**
-- Gradle only; Spring Boot 4 (`@MockitoBean`); Lambda zip deploys — no containers, Kubernetes, GitOps or Actuator
-  health checks.
-- IaC per Q-02 (proposed CDK in Java); Terraform advice applies only if Q-02 chooses Terraform.
-- Vite SPA without Server Components; vector dimension 1024; secrets in Secrets Manager.
+- Python 3.13 Lambda functions as zip deploys (ADR-015) — no backend application, containers, Kubernetes or GitOps.
+- AWS changes as AWS CLI runbooks (Q-12 C); IaC per Q-02 later; Terraform advice applies only if Q-02 chooses it.
+- Vite SPA without Server Components; vector dimension per ADR-007 / Q-15; secrets in Secrets Manager.
 - Learning setup: single region, single AZ where cheaper, no DR/RTO/RPO targets, no staging environment unless Q-07
   says otherwise; no PR/change-ticket flow until a CI task introduces it.
-- Tests: JUnit 5 + Testcontainers for Java; the JS/Python examples in `test-master` are for method only.
+- Tests: pytest for Lambdas; the examples in `test-master` and `postgres-pro` are for method only.
 - No commits, pushes or deployments without the owner's go-ahead (§3.8).
 
 **Skills ownership rule:** a task that adds a new external dependency (AWS service, library, tool), a new internal
@@ -168,13 +173,17 @@ skills use `source: project` and name the task that created them.
 ## 9. Commands
 
 ```bash
-docker compose up -d                       # local PostgreSQL + pgvector on :5432
-./gradlew :<module>:build                  # one JVM module (backend draft excluded, see §7)
-cd frontend && npm ci && npm run dev       # http://localhost:5173, /api proxied to :8080
-npm run lint && npm run build
+docker compose up -d                       # local PostgreSQL + pgvector on :5432 (major 17, see R-14)
+cd frontend && npm ci && npm run dev       # http://localhost:5173 (calls the dev API from VITE_API_URL)
+npm run build
+# Lambda commands (pytest, zip) are added by T02-02 with the python-lambda skill
 ```
 
 ## 10. Repository facts
 
-- No Git repository, no AWS infrastructure, no IaC module yet. Work status: [docs/PLAN.md](docs/PLAN.md).
-- `backend/` and `frontend/src` contain draft code written before the plan (R-04); not accepted, the backend never compiled.
+- Git repository on GitHub (`origin`), branch `main`. Work status: [docs/PLAN.md](docs/PLAN.md).
+- Week 1 AWS infrastructure (Amplify Hosting, VPC, RDS PostgreSQL 14, RDS Proxy, three Python Lambdas, log groups)
+  was built manually in the console by the owner; the facts are recorded by T01-06. No IaC yet (T00-03).
+- The Lambda code exists only in AWS until it is brought into `lambdas/` (`admin`: T02-02; R-15).
+- The Spring Boot `backend/` draft was deleted (2026-11-12); `settings.gradle` includes only `frontend`.
+- `frontend/src` contains draft code written before the plan; handled by T00-04, T02-04, T02-05.

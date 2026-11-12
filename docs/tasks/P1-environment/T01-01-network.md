@@ -2,18 +2,22 @@
 id: T01-01
 title: "Network stack: VPC, subnets, NAT, security groups"
 phase: P1-environment
-status: Blocked
+status: Review
 agent: devops
 skills: [cloud-architect]
-depends_on: [T00-03]
-blocked_by: [Q-08]
+depends_on: []  # built manually without an IaC base (Q-12 C)
+blocked_by: []
 design: ../../design/backend-foundation.md
 spec: ../../specs/02-database-connectivity.md
 acceptance: [AC-02.1, AC-02.2]
 ---
 # T01-01 — Network stack: VPC, subnets, NAT, security groups
 
-> **BLOCKED** by [Q-08](../../RISKS.md#q-08).
+> **2026-11-12 — built manually by the owner** in the AWS console ([Q-12](../../RISKS.md#q-12), option C).
+> T01-06 records the facts of the build and verifies the ACs; the owner sets `Done` from that evidence.
+> Constraints and ACs that assume IaC (stacks, exports, cdk-nag) are deferred to T00-03. Scope items the manual
+> build did not produce (e.g. the skill file) appear as open items in T01-06; the owner waives them or asks devops to
+> deliver them.
 
 ## // BUSINESS CONTEXT
 

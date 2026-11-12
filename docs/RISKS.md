@@ -1,7 +1,7 @@
 # RISKS.md — Open Decisions and Risk Register
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md) · [design/](design/) · [tasks/](tasks/)
-Last updated: 2026-11-05
+Last updated: 2026-11-12
 
 This file has two registers:
 
@@ -25,133 +25,81 @@ This file has two registers:
 
 | ID | Decision needed | Recommendation | Owner | Status | Blocks |
 |---|---|---|---|---|---|
-| [Q-01](#q-01) | Meaning of "CloudFront inside an isolated VPC" (G2) | CloudFront from Amplify Hosting + private subnets for backend | OWNER | Open | T01-05 |
-| [Q-02](#q-02) | Infrastructure-as-Code tool | AWS CDK (Java) | OWNER + ARCH | Open | T00-03 |
-| [Q-03](#q-03) | AWS region | `eu-central-1` (or `us-east-1`) | OWNER | Open | T00-01, T00-03 |
-| [Q-04](#q-04) | Git hosting | GitHub | OWNER | Open | T00-02 |
-| [Q-05](#q-05) | Chatbot knowledge base: source, volume, language | define a sample dataset | OWNER | Deferred (not needed in Week 1) | — |
-| [Q-06](#q-06) | Stage 2: LLM answers / Bedrock Agent / NL→SQL | decide after semantic search works | OWNER | Deferred (not needed in Week 1) | — |
-| [Q-07](#q-07) | Environments | single `dev` environment | OWNER | Open | T00-03 |
-| [Q-08](#q-08) | Network layout: curriculum (public subnet + NAT) vs ADR-005 (isolated, no NAT) | A — follow the curriculum | OWNER | Open | T01-01 |
-| [Q-09](#q-09) | PostgreSQL major version: 14 (curriculum) vs newest supported | 17 (same as local Docker), deviation noted | OWNER | Open | T01-02 |
-| [Q-10](#q-10) | Code of the Week 1 "empty" Lambda functions | A — plain-Java handlers in a separate module | OWNER + ARCH | Open | T01-03 |
-| [Q-11](#q-11) | Meaning of "AWS SDK v3 configured locally" | JS SDK v3 + Java SDK 2.x, same profile | OWNER | Open | T00-01 |
-
-### <a id="q-01"></a>Q-01 — "CloudFront inside an isolated VPC"
-
-Goal G2 reads "configure global content delivery via Amazon CloudFront inside an isolated VPC". CloudFront is a
-global edge service and is never deployed inside a VPC.
-
-| Option | Meaning | Effort |
-|---|---|---|
-| **A (recommended)** | CloudFront is the one Amplify Hosting manages for the SPA; "isolated VPC" refers to the backend (Lambda, RDS Proxy, RDS in private isolated subnets) | none extra |
-| B | Own CloudFront distribution in front of both SPA and API Gateway (single domain, WAF in one place) | +1–2 days |
-| C | CloudFront **VPC origins** to a private ALB/EC2 origin | does not fit the serverless design; not recommended |
-
-Note (2026-11-05): with option A the CloudFront distribution belongs to Amplify and is not visible or manageable in our
-account (re:Post, not official docs). The proof of G2 is then the response headers (`Via: … cloudfront.net`,
-`X-Cache`, `X-Amz-Cf-Id`) — spec 01 AC-01.1. If the owner wants a distribution visible in the account, choose B.
+| [Q-02](#q-02) | Infrastructure-as-Code tool for the later IaC task | AWS CDK in Python | OWNER + ARCH | Open (deferred by Q-12 C) | T00-03 |
+| [Q-05](#q-05) | Chatbot data: what the search runs over | users table per the Week 4 curriculum | OWNER | Deferred (Week 4) | — |
+| [Q-14](#q-14) | Registration fields: Cognito attribute schema and validation rules (immutable once the pool exists) | table in Q-14, option A | OWNER | Open | T02-01, T02-04 |
+| [Q-15](#q-15) | Vector dimension and model: 1536 (Week 4 curriculum) vs 1024 (ADR-007) | decide when Week 4 is planned | OWNER + ARCH | Open (Week 4, not blocking now) | — |
+| [Q-16](#q-16) | Database migrations without Java/Flyway-in-Lambda | A — versioned SQL files + small Python runner | OWNER + ARCH | Open (Week 3, not blocking now) | — |
 
 ### <a id="q-02"></a>Q-02 — IaC tool
 
+Deferred by Q-12 (option C): Week 1 and Week 2 resources are created manually / with recorded AWS CLI commands; a
+dedicated task (T00-03) codifies them later. The tool should import existing resources (the Cognito pool cannot be
+recreated without losing users).
+
 | Option | Pros | Cons |
 |---|---|---|
-| **AWS CDK, Java (recommended)** | same language as backend, good L2 constructs (VPC, RDS Proxy, HTTP API, Cognito), cdk-nag for checks | needs CDK CLI (Node) and `cdk bootstrap` |
-| Terraform | industry standard, provider-agnostic | second language (HCL), more boilerplate |
-| AWS SAM | simple for Lambda | weak for VPC/RDS/Proxy |
-| Console clicks | fast to start | not reproducible; against "You Build It, You Run It" |
+| **AWS CDK, Python (recommended)** | same language as the Lambdas (ADR-015); good L2 constructs (HTTP API, Cognito, RDS Proxy); `cdk import` / `cdk migrate --from-scan` for existing resources; cdk-nag | needs the CDK CLI (Node) and `cdk bootstrap` |
+| AWS CDK, TypeScript | same language as the SPA; CDK's primary language | IaC and Lambdas in different languages and toolchains |
+| Terraform | industry standard, `import` blocks | second configuration language (HCL), more boilerplate |
+| AWS SAM | simple for Lambda | weak for VPC/RDS/Proxy and Cognito details |
 
-### <a id="q-03"></a>Q-03 — Region
+### <a id="q-05"></a>Q-05 — Chatbot data
 
-Must offer Bedrock `amazon.titan-embed-text-v2:0`, RDS Proxy for the chosen PostgreSQL version, Lambda SnapStart
-on arm64, Amplify Hosting. Candidates: `eu-central-1` (closer to the team) or `us-east-1` (widest Bedrock catalog).
-Verify model availability in the Bedrock console before deciding (see R-05).
+Originally: which documents the chatbot searches. The Week 4 curriculum stores embeddings in `users.embedding` and
+Week 5 asks for "users similar to …", so the search most likely runs over users. Confirm or reopen when Week 4 is
+planned (the ≥ 1000-record latency check needs a test dataset of users).
 
-### <a id="q-04"></a>Q-04 — Git hosting
+### <a id="q-14"></a>Q-14 — Registration fields: Cognito schema and validation
 
-Amplify Hosting supports GitHub, GitLab, Bitbucket and CodeCommit. The choice also defines the CI platform
-(e.g. GitHub Actions with OIDC to AWS). The project is not under version control yet.
+Raised 2026-11-12, still open (the owner has not answered the ranges). The requirements list eight sign-up fields but
+no ranges. In Cognito the **sign-in attribute, the set of required standard attributes and every custom attribute
+(name, type, min/max) cannot be changed after the User Pool is created** — a wrong choice means a new pool and losing
+all users. Custom attributes can never be marked *required*, and Cognito does not validate the value of standard
+attributes such as `gender`.
 
-### <a id="q-05"></a>Q-05 — Chatbot knowledge base
+Recommended schema and rules (option A):
 
-What documents does the chatbot search? Needed: source and format (PDF, Markdown, web pages, DB rows), approximate
-size (documents / total text), language(s), update frequency. Drives chunking and the ≥ 10k-vector dataset for
-the HNSW / IVFFlat experiments. If no real data exists, approve a public sample dataset.
-
-### <a id="q-06"></a>Q-06 — Stage 2: LLM
-
-The architecture diagram shows a Bedrock Agent (Claude 3) doing NL→SQL / vector search. Goals G1–G8 only require
-embeddings and vector search. Options: (a) no LLM; (b) RAG answers with Claude via Bedrock Converse API;
-(c) Bedrock Agent with action groups. Recommendation: decide after semantic search works.
-
-### <a id="q-07"></a>Q-07 — Environments
-
-Single `dev` environment (recommended for a learning project and cost) or `dev` + `prod`. Affects naming, CI/CD
-promotion and cost.
-
-### <a id="q-08"></a>Q-08 — Network layout
-
-Source: [Week 1 requirements](requirements/week-01-environment.md) step S3 asks for 1 public subnet, 2 private subnets and a NAT
-Gateway. ADR-005 (Proposed) has isolated subnets only, no NAT, with interface endpoints.
-
-| Option | Layout | Pros | Cons |
+| Field (UI) | Cognito attribute | Type / constraint in Cognito | Validation (SPA) |
 |---|---|---|---|
-| **A (recommended)** | 1 public subnet (NAT Gateway, 1 AZ) + 2 private-with-egress subnets (2 AZs) for Lambda, RDS, Proxy | matches the curriculum and its checks; any AWS service reachable without one endpoint per service (removes R-09); simple | NAT cost runs 24/7; outbound internet path exists; single-AZ NAT is a single point of failure (acceptable for learning) |
-| B | Keep ADR-005: isolated subnets + `secretsmanager` / `bedrock-runtime` endpoints | no internet path, closest to "isolated VPC" in G2 | deviates from the curriculum; every new AWS service needs an endpoint |
-| C | A for Lambda + separate isolated subnets for RDS/Proxy | data tier has no route out; still matches the curriculum | 4 private subnets, slightly more config |
+| First name | `given_name` (standard, required) | string | trimmed, 1..50 characters, letters, space, `-`, `'` |
+| Last name | `family_name` (standard, required) | string | same as first name |
+| Email | `email` (standard, required, sign-in attribute, auto-verified) | string | e-mail syntax, ≤ 254 characters |
+| Gender | `gender` (standard, required) | string, not validated by Cognito | exactly `F` or `M` |
+| Date of birth | `birthdate` (standard, required) | string `YYYY-MM-DD` (OIDC) | input `DD/MM/YYYY`, real calendar date, between 1900-01-01 and today minus 13 years |
+| Country of living | `custom:country` | String, min 2, max 2 | ISO 3166-1 alpha-2 code chosen from a list (names rendered with `Intl.DisplayNames`) |
+| Height, cm | `custom:height` | Number, min 50, max 250 | integer 50..250 |
+| Weight, kg | `custom:weight` | Number, min 20, max 300 | integer 20..300 |
 
-If A or C is accepted, ADR-005 is rewritten and ARCHITECTURE.md §4 updated before T01-01 starts.
+| Option | Server-side enforcement | Pros | Cons |
+|---|---|---|---|
+| **A (recommended)** | SPA validation + the Cognito constraints above | simple; Cognito rejects out-of-range custom values | a direct call to the Cognito `SignUp` API can bypass the `gender`/`birthdate` rules and omit custom attributes; the Week 3 sync must tolerate such values |
+| B | A + a PreSignUp Lambda trigger that validates all fields before the account is created | true server-side validation, clean rejection | one more synchronous trigger (5 s limit), extra function, beyond the week topic |
+| C | SPA validation only; custom attributes without min/max in Cognito | ranges can change later without a new pool | no server-side bound at all |
 
-Cost (AWS Price List API, 2026-11-05, 730 h/month, without data transfer):
+The owner confirms or changes every range (in particular the minimum age and the integer-only height and weight) and
+the option before T02-01 creates the pool.
 
-| Item | eu-central-1 | us-east-1 |
-|---|---|---|
-| NAT Gateway, 1 AZ | ~$38 + $0.052/GB | ~$33 + $0.045/GB |
-| Interface endpoint, 2 AZs (per service) | ~$17.5 | ~$14.6 |
-| Option B with `secretsmanager` + `bedrock-runtime` | ~$35 | ~$29 |
+### <a id="q-15"></a>Q-15 — Vector dimension and embedding model (Week 4)
 
-Options A and B cost about the same; the difference is behaviour, not price. Note: a Lambda in a VPC needs NAT or an
-endpoint to reach Secrets Manager and Bedrock; whether Lambda's own log delivery needs anything is not documented
-for standard functions and must be checked in the account.
+Raised 2026-11-12 from the Week 4 curriculum: "1536-dimensional vectors", `ORDER BY embedding <-> $1` (L2 distance),
+"Bedrock Titan Embeddings (or Claude 3.5 Sonnet)". ADR-007 (Proposed) has Titan Text Embeddings v2, 1024 dimensions,
+cosine distance. Facts to verify when Week 4 is planned: Titan Text Embeddings v2 outputs 256/512/1024 dimensions;
+1536 is the fixed output of the older Titan Embeddings G1 – Text (v1); Claude models do not produce embeddings.
+Options: (a) follow the curriculum — Titan G1 Text, `vector(1536)`, `<->`; (b) keep ADR-007 — Titan v2, 1024, cosine,
+deviation noted; (c) Titan v2 1024 with `<->` on normalised vectors (same ranking as cosine). Model availability per
+region: [R-05](#2-risk-register). Not blocking until Week 4.
 
-### <a id="q-09"></a>Q-09 — PostgreSQL version
+### <a id="q-16"></a>Q-16 — Database migrations (Week 3)
 
-Curriculum step S4 says PostgreSQL 14. ARCHITECTURE.md §3.5 says "newest major supported by RDS Proxy"; local
-`docker-compose.yml` runs 17.
+Raised 2026-11-12: ADR-008 (Flyway in a Java `migrate` function) no longer fits ADR-015. The database is private
+(reachable only from the VPC through the proxy). Not blocking until the first schema (Week 3).
 
-Facts (checked 2026-11-05, AWS docs and Price List API):
-
-- RDS Proxy supports RDS for PostgreSQL 10–18, so the proxy does not restrict the choice (R-07 is not a constraint).
-- PostgreSQL 14: community end of life 2026-11-12; RDS standard support ends **2027-02-28**; from 2027-03-01 RDS
-  Extended Support is charged per vCPU-hour. The PG 14 rate is not published yet; at the PG 11–13 rate
-  ($0.122/vCPU-h in eu-central-1) a 2-vCPU `db.t4g.micro` would cost ~$178/month extra, about 13× the instance.
-- PostgreSQL 17: standard support until 2030-02-28. pgvector with HNSW is available on all current 14.x and 17.x
-  minors (0.8.x).
-- CDK has `PostgresEngineVersion.VER_14` … `VER_18`.
-
-Options: (a) 14 exactly as written — fine for Week 1, but the stack must be destroyed or upgraded before 2027-03-01;
-(b) **17 (recommended)** — same major as local Docker and Testcontainers, no support deadline during the project,
-deviation noted in the Week 1 report; (c) 14 now, major upgrade as a separate task later (extra work that teaches
-RDS upgrades). Whatever is chosen, local Docker and Testcontainers use the same major.
-
-### <a id="q-10"></a>Q-10 — Code of the Week 1 Lambda functions
-
-Curriculum step S5 asks for three *empty* functions (Admin, Chatbot, Sync) and S6 for `SELECT 1` from Admin.
-The planned code is one Spring Boot artifact with SnapStart (ADR-002), but the draft has never compiled (R-04).
-
-| Option | Meaning |
-|---|---|
-| **A (recommended)** | Week 1 handlers are small plain-Java classes (no Spring context) in a separate small Gradle module, so the uncompiled draft in `backend` does not block Week 1: `admin` runs `SELECT 1` via JDBC with credentials from Secrets Manager; `chatbot` and `sync` only log and return. Replaced by the Spring handlers later |
-| A2 | Same as A, but inside `backend` — then a green build of the draft becomes a Week 1 prerequisite (new task) |
-| B | Review the draft first and deploy the Spring artifact with all three handlers from the start |
-| C | Inline/placeholder code defined in IaC only; `SELECT 1` in a separate throw-away function |
-
-### <a id="q-11"></a>Q-11 — "AWS SDK v3 configured locally"
-
-"AWS SDK v3" is the AWS SDK for JavaScript. The backend uses the AWS SDK for Java 2.x (no Java v3 exists); the
-frontend uses Amplify, which uses the JS SDK v3 internally. Recommendation: accept W1-G3 as (1) AWS CLI v2 profile
-works and (2) both SDKs resolve the same profile — a one-off check with the Java SDK default credential chain and
-with `@aws-sdk/client-sts` (Node), recorded in T00-01. Alternative: Java SDK only, deviation noted.
+| Option | Meaning | Pros | Cons |
+|---|---|---|---|
+| **A (recommended)** | Plain versioned SQL files `V<n>__<description>.sql` in the repository, applied by a small Python runner in a `migrate` Lambda (records applied versions in a `schema_migrations` table, one transaction per file, advisory lock) | no new tool; same naming as Flyway, so Flyway can take over later; runs inside the VPC | ~50 lines of own code to test; a fourth function |
+| B | Flyway CLI run from AWS CloudShell in a VPC environment (or a temporary SSM bastion) | the standard tool, checksums, repair | Java/Flyway download per session; manual step outside the repo's code |
+| C | Alembic (SQLAlchemy) in a `migrate` Lambda | mature Python tool, down-migrations | SQLAlchemy dependency for a few tables; heavier zip |
 
 ---
 
@@ -161,15 +109,16 @@ Scale: Likelihood / Impact — Low · Medium · High.
 
 | ID | Risk | L | I | Mitigation | Watched by | Status |
 |---|---|---|---|---|---|---|
-| R-01 | Spring Boot cold start in Lambda is 4–8 s | High | Medium | SnapStart, arm64, priming hooks, lazy beans; measure before/after | later phase (Spring in Lambda) | Open |
-| R-02 | Cognito PostConfirmation trigger times out (5 s hard limit) on a cold start → sign-up fails for the user | High | High | SnapStart on `sync` and trigger bound to the published alias; minimal Spring context; fallback: plain handler without Spring or provisioned concurrency = 1 | later phase (Cognito) | Open |
-| R-03 | Version incompatibility: `aws-serverless-java-container-springboot4` 3.0.x is built for Spring Boot 4.0.x | Medium | Medium | Pin Spring Boot 4.0.x (ADR-002); upgrade only as a dedicated task | later phase (Spring in Lambda) | Open |
-| R-04 | Draft code was written before the plan and never compiled (no Maven access at authoring time) | High | Medium | Treat as untrusted draft; review with a green build before any use. Known issue for that review: `frontend/src/api/client.ts` sends the ID token, ADR-004 proposes the access token | T00-04 (frontend); backend draft — later phase | Open |
-| R-05 | Titan Text Embeddings v2 unavailable or not enabled in the chosen region | Medium | High | Check model access when choosing the region (Q-03) | later phase (Bedrock) | Open |
-| R-06 | Cost of an idle stack (RDS, RDS Proxy, NAT or interface endpoints) — figures in [backend-foundation](design/backend-foundation.md) §Cost | High | Medium | AWS Budgets alert before the first deploy; destroy stacks when idle | T00-01, T01-02, T01-06 | Open |
-| R-08 | SnapStart restores stale state (open DB connections, cached credentials, random seeds) | Medium | High | No DB connections during init (Hikari `minimum-idle=0`), refresh secrets after restore, CRaC `afterRestore` hooks | later phase (SnapStart) | Open |
-| R-09 | Isolated subnets have no internet: any AWS service without a VPC endpoint times out at runtime | Medium | Medium | Every new AWS dependency requires an endpoint (ARCH review); integration test in dev for each call path | T01-01 (only if Q-08 = B) | Open |
-| R-10 | Double-wrapped or unparsable logs when Lambda JSON log format meets app-level JSON | Medium | Low | Spike before standardising the log format (ADR-012); Week 1 handlers print plain JSON lines | T01-03 | Open |
+| R-02 | A synchronous Cognito trigger in the sync chain times out (5 s hard limit) on a cold start → sign-up fails for the user | Medium | High | Decided with the Week 3 wiring: keep the trigger function minimal (only `PutEvents`) or use an asynchronous path; measure the cold start | Week 3 planning | Open |
+| R-05 | The embedding model required in Week 4 is unavailable or not enabled in the region of the build | Medium | High | Check model access in the Bedrock console when Week 4 is planned ([Q-15](#q-15)) | Week 4 planning | Open |
+| R-06 | Cost of the idle environment (RDS, RDS Proxy, NAT) — figures in [backend-foundation](design/backend-foundation.md) §Cost; a manually built environment cannot be removed and recreated cheaply | High | Medium | AWS Budgets alert (T00-01); stop the RDS instance when idle; record every change as a runbook; IaC task T00-03 | T00-01, T01-06 | Open |
+| R-09 | Private subnets without a NAT or VPC endpoint: any AWS service call times out at runtime | Medium | Medium | Relevant only if the Week 1 build has no NAT (T01-06 records the layout); every new AWS dependency checked by ARCH | T01-06 | Open |
+| R-10 | Double-wrapped or unparsable logs when Lambda advanced logging (JSON) meets Powertools JSON | Medium | Low | Spike in Week 6 before standardising (ADR-012); until then one stdlib JSON line per invocation | Week 6 planning | Open |
+| R-11 | The user is `CONFIRMED` in Cognito but the copy in PostgreSQL is missing or late (sync failure, asynchronous chain) | Medium | Medium | Designed in Week 3: idempotent upsert by `sub`, tolerant of invalid attribute values (Q-14), re-sync runbook, "profile not ready" state where the SPA reads the copy | Week 3 planning | Open |
+| R-12 | The user can change own Cognito attributes through the public `UpdateUserAttributes` API (the app client must allow writing them for `SignUp`), bypassing the SPA validation; later also drift against the PostgreSQL copy | Low | Low | Accepted for Week 2 (no edit feature). Week 3: decide whether attribute changes are synced | T02-01, Week 3 planning | Open |
+| R-13 | Cognito default e-mail sender is limited to a small daily quota (50 e-mails/day per AWS docs at the time of writing), so sign-up tests can stop receiving codes | Low | Low | Enough for learning; switch to Amazon SES only if the quota is hit (new task) | T02-01, T02-06 | Open |
+| R-14 | PostgreSQL 14 (Week 1 build): RDS standard support ends 2027-02-28; from 2027-03-01 RDS Extended Support is charged per vCPU-hour (estimate at the PG 11–13 rate, $0.122/vCPU-h in eu-central-1: ~$178/month for 2 vCPUs, ~13× the instance). Local `docker-compose.yml` runs PostgreSQL 17 | Medium | High | Upgrade to a supported major as a dedicated task, or remove the instance, before 2027-02-28; align `docker-compose.yml` with the RDS major in the first database task (Week 3) | owner, Week 3 planning | Open |
+| R-15 | Week 1 resources and Lambda code exist only in AWS (console-built): the code is not in Git, settings are not reproducible, console edits can overwrite code deployed from Git | High | Medium | T01-06 records the settings; T02-02 brings `admin` into Git, `sync` and `chatbot` follow in their weeks; no console code edits of a function once its code is in Git; IaC task T00-03 | T01-06, T02-02 | Open |
 
 ---
 
@@ -177,4 +126,19 @@ Scale: Likelihood / Impact — Low · Medium · High.
 
 | ID | Resolution | Date | Decided by |
 |---|---|---|---|
-| R-07 | Closed: RDS Proxy supports RDS for PostgreSQL 10–18 (AWS docs checked), so it does not limit the version choice (see Q-09) | 2026-11-05 | ARCH |
+| R-07 | Closed: RDS Proxy supports RDS for PostgreSQL 10–18 (AWS docs checked), so it does not limit the version choice | 2026-11-05 | ARCH |
+| <a id="q-01"></a>Q-01 | Decided by the Week 1 build: the CloudFront distribution managed by Amplify Hosting; "isolated VPC" refers to the backend. Proof by response headers (AC-01.1); Amplify app id/domain to be recorded by T01-06 | 2026-11-12 | OWNER |
+| <a id="q-03"></a>Q-03 | Decided by the Week 1 build (ADR-009); value to be recorded by T01-06 | 2026-11-12 | OWNER |
+| <a id="q-04"></a>Q-04 | Decided by the Week 1 build: GitHub (local `origin` remote `github.com/maxim-semenko/aws_challenge`); the Amplify connection to it is recorded by T01-06 | 2026-11-12 | OWNER |
+| <a id="q-06"></a>Q-06 | Answered by the curriculum (Week 5): Bedrock Agent, NL→SQL when the query contains "sql", otherwise embedding similarity; designed when Week 5 is planned; ADR-010 superseded | 2026-11-12 | OWNER (curriculum) |
+| <a id="q-07"></a>Q-07 | Decided by the Week 1 build; environment(s) and resource names to be recorded by T01-06 | 2026-11-12 | OWNER |
+| <a id="q-08"></a>Q-08 | Decided by the Week 1 build; subnet/NAT layout to be recorded by T01-06; ADR-005 superseded | 2026-11-12 | OWNER |
+| <a id="q-09"></a>Q-09 | PostgreSQL 14, as in the curriculum and the build; minor version to be recorded by T01-06; consequences in R-14 | 2026-11-12 | OWNER |
+| <a id="q-10"></a>Q-10 | The three Week 1 functions were created manually in Python; runtime version, architecture, memory, timeout and the probe's driver to be recorded by T01-06; T01-03 (Java handlers) deleted as obsolete; ADR-015 | 2026-11-12 | OWNER |
+| <a id="q-11"></a>Q-11 | Decided by the Week 1 build; which SDK(s) are configured locally (JS SDK v3 / boto3) to be recorded by T01-06 (AC-03.2) | 2026-11-12 | OWNER |
+| <a id="q-12"></a>Q-12 | Option C: AWS changes with AWS CLI commands recorded as a replayable runbook in each devops task's Notes; IaC in a separate later task (T00-03, tool per Q-02). Week 1 was built manually by the owner; T01-06 verifies it and records the actual resources; IaC ACs (AC-01.4, AC-02.9) deferred to T00-03 | 2026-11-12 | OWNER |
+| <a id="q-13"></a>Q-13 | Closed by ADR-015: Python 3.13 Lambda functions; `sync` and `migrate` moved to Week 3 with the curriculum | 2026-11-12 | OWNER |
+| R-01 | Closed: Spring Boot is not used (ADR-015) | 2026-11-12 | OWNER |
+| R-03 | Closed: `aws-serverless-java-container` is not used (ADR-015) | 2026-11-12 | OWNER |
+| R-04 | Closed: the backend draft was deleted by the owner; the remaining `frontend/src` draft is handled by T00-04 (build), T02-04 (auth screens) and T02-05 (API client sends the access token, ADR-004) | 2026-11-12 | OWNER |
+| R-08 | Closed: SnapStart is not used (ADR-015) | 2026-11-12 | OWNER |

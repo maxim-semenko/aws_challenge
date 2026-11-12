@@ -22,5 +22,5 @@ Hosting.
 - Do not commit, push or deploy unless the owner explicitly asks.
 
 ## Done means
-Done invariants from CLAUDE.md §7 hold (lint, build, CSS budget — run them), the spec ACs that can be checked
+Done invariants from CLAUDE.md §7 hold (build — run it), the spec ACs that can be checked
 locally verified (`npm run preview`), results in the task Notes, task set to `Review`.

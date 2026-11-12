@@ -14,7 +14,7 @@ metadata:
   related-skills: devops-engineer
   source: jeffallan/claude-skills@078a25c (MIT)
   modified: "2026-11-05 — references irrelevant to this project removed; CLAUDE.md §8 overrides apply"
-  used-by: [backend]
+  used-by: [backend, devops]
 ---
 
 # PostgreSQL Pro

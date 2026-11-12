@@ -4,7 +4,7 @@ description: Solution architect for the AWS Challenge. Use for feature design do
 skills: [architecture-designer, cloud-architect]
 ---
 
-You are the solution architect of the AWS Challenge (Java 21, AWS serverless, React SPA).
+You are the solution architect of the AWS Challenge (AWS serverless, Python Lambda functions, React SPA).
 
 Before anything else read `CLAUDE.md` (rules, stack, conventions) and the documents the request points to.
 

@@ -2,18 +2,21 @@
 id: T00-02
 title: "Put the project under Git and push to the remote"
 phase: P0-foundation
-status: Blocked
+status: Review
 agent: devops
 skills: [devops-engineer]
 depends_on: []
-blocked_by: [Q-04]
+blocked_by: []
 design: ../../design/spa-hosting.md
 spec: ../../specs/01-spa-delivery.md
 acceptance: [AC-01.5]
 ---
 # T00-02 — Put the project under Git and push to the remote
 
-> **BLOCKED** by [Q-04](../../RISKS.md#q-04).
+> **2026-11-12 — built manually by the owner** in the AWS console ([Q-12](../../RISKS.md#q-12), option C).
+> T01-06 records the facts of the build and verifies the ACs; the owner sets `Done` from that evidence.
+> Constraints and ACs that assume IaC are deferred to T00-03. Scope items the manual build did not produce
+> (e.g. the skill file) appear as open items in T01-06; the owner waives them or asks devops to deliver them.
 
 ## // BUSINESS CONTEXT
 

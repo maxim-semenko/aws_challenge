@@ -2,18 +2,21 @@
 id: T01-05
 title: "Hosting stack: Amplify app connected to Git"
 phase: P1-environment
-status: Blocked
+status: Review
 agent: devops
 skills: [cloud-architect, devops-engineer]
-depends_on: [T00-02, T00-03, T00-04]
-blocked_by: [Q-01]
+depends_on: [T00-02, T00-04]
+blocked_by: []
 design: ../../design/spa-hosting.md
 spec: ../../specs/01-spa-delivery.md
 acceptance: [AC-01.1, AC-01.2, AC-01.3, AC-01.4]
 ---
 # T01-05 — Hosting stack: Amplify app connected to Git
 
-> **BLOCKED** by [Q-01](../../RISKS.md#q-01).
+> **2026-11-12 — built manually by the owner** in the AWS console ([Q-12](../../RISKS.md#q-12), option C).
+> T01-06 records the facts of the build and verifies the ACs; the owner sets `Done` from that evidence.
+> Constraints and ACs that assume IaC (AC-01.4) are deferred to T00-03. Scope items the manual build did not produce
+> (e.g. the skill file) appear as open items in T01-06; the owner waives them or asks devops to deliver them.
 
 ## // BUSINESS CONTEXT
 

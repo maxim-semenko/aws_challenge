@@ -1,7 +1,7 @@
 # Spec 01 — SPA delivery from Git through CloudFront
 
 Requirements: [week-01](../requirements/week-01-environment.md) W1-G1, S1, S2 · Design: [spa-hosting](../design/spa-hosting.md)
-Tasks: T00-02, T00-04, T01-05, T01-06
+Tasks: T00-02, T00-04, T01-05, T01-06; AC-01.4 deferred to T00-03 (Q-12 C)
 
 ## Purpose
 
@@ -36,7 +36,7 @@ Every push to `main` publishes the current SPA, served over HTTPS through CloudF
 
 | Case | Expected result |
 |---|---|
-| Build fails (lint/type error) | Amplify build fails, the previous version stays live |
+| Build fails (type error) | Amplify build fails, the previous version stays live |
 | Deep link `/admin` reloaded | 200 with `index.html` (rewrite), not 404 |
 | Request to a missing asset `/x.js` | 404 (no rewrite for paths with an extension) |
 | HTTP request | redirected to HTTPS |
