@@ -4,10 +4,4 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    // forward API calls to the Spring backend during development
-    proxy: {
-      '/api': 'http://localhost:8080',
-    },
-  },
 })

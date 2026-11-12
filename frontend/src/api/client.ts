@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 /**
- * fetch() wrapper: adds "Authorization: Bearer <Cognito ID token>" for the API Gateway JWT authorizer.
+ * fetch() wrapper: adds "Authorization: Bearer <Cognito access token>" for the API Gateway JWT authorizer (ADR-004).
  * Amplify refreshes expired tokens automatically inside fetchAuthSession().
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -21,9 +21,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (isAuthConfigured) {
     const { tokens } = await fetchAuthSession()
-    const idToken = tokens?.idToken?.toString()
-    if (idToken) {
-      headers.set('Authorization', `Bearer ${idToken}`)
+    const accessToken = tokens?.accessToken?.toString()
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`)
     }
   }
 
@@ -34,13 +34,18 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T
 }
 
-// ---- API types (mirror the Spring DTOs) ----
+// ---- API types ----
 
-export interface CurrentUser {
-  sub: string
-  email: string
+/** GET /api/me → 200, exactly spec 05 §Outputs. */
+export interface MeResponse {
+  id: string
+  username: string | null
   groups: string[]
+  /** ISO-8601 UTC */
+  expiresAt: string
 }
+
+export const meQueryKey = ['me'] as const
 
 export interface DocumentSearchResult {
   id: number
@@ -65,7 +70,7 @@ export interface PageResponse<T> {
 
 export const endpoints = {
   health: () => api<{ status: string }>('/api/health'),
-  me: () => api<CurrentUser>('/api/me'),
+  me: () => api<MeResponse>('/api/me'),
   search: (query: string, limit = 5) =>
     api<DocumentSearchResult[]>('/api/chat/search', {
       method: 'POST',

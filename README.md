@@ -24,7 +24,8 @@ aws_challenge/
 docker compose up -d                       # PostgreSQL + pgvector on :5432
 
 cd frontend
-cp .env.example .env.local                 # leave values empty to run without Cognito
+# optional: .env.local with the VITE_* variables (names: docs/specs/04, values: docs/ENVIRONMENT.md);
+# without it the SPA runs without Cognito
 npm ci
 npm run dev                                # http://localhost:5173
 ```

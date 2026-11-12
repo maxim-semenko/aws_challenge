@@ -1,7 +1,7 @@
 # AWS Amplify Hosting build spec (monorepo: the SPA lives in frontend/).
 # In the Amplify console: App settings -> Environment variables:
 #   AMPLIFY_MONOREPO_APP_ROOT=frontend
-#   VITE_AWS_REGION, VITE_COGNITO_USER_POOL_ID, VITE_COGNITO_USER_POOL_CLIENT_ID, VITE_API_URL
+#   the VITE_* variables of docs/specs/04-user-registration-and-sign-in.md §Inputs (values: docs/ENVIRONMENT.md)
 # and add the SPA rewrite: source </^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>  ->  /index.html  (200 Rewrite)
 version: 1
 applications:

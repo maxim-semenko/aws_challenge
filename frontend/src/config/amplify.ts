@@ -1,22 +1,22 @@
 import { Amplify } from 'aws-amplify'
 
 /**
- * Cognito settings come from Vite env vars (VITE_*), see .env.example.
- * In Amplify Hosting set them under App settings -> Environment variables.
+ * Public Cognito identifiers and the API base URL come only from Vite env vars (names: spec 04 §Inputs,
+ * values: docs/ENVIRONMENT.md). Locally they go to .env.local; in Amplify Hosting they are environment variables.
+ * Every value may be empty: then the auth UI is hidden and the home page still renders (AC-04.10).
  */
 export const env = {
-  region: import.meta.env.VITE_AWS_REGION ?? 'us-east-1',
-  userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID ?? '',
-  userPoolClientId: import.meta.env.VITE_COGNITO_USER_POOL_CLIENT_ID ?? '',
-  // Empty = same origin (Vite dev proxy forwards /api to Spring Boot on :8080)
-  apiUrl: (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, ''),
+  region: (import.meta.env.VITE_AWS_REGION ?? '').trim(),
+  userPoolId: (import.meta.env.VITE_USER_POOL_ID ?? '').trim(),
+  userPoolClientId: (import.meta.env.VITE_USER_POOL_CLIENT_ID ?? '').trim(),
+  apiUrl: (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/$/, ''),
 }
 
-export const isAuthConfigured = Boolean(env.userPoolId && env.userPoolClientId)
+export const isAuthConfigured = Boolean(env.region && env.userPoolId && env.userPoolClientId)
 
-export function configureAmplify() {
+/** Configures Amplify Auth once at start-up; a no-op without configuration. Sign-in uses the default USER_SRP_AUTH. */
+export function configureAmplify(): void {
   if (!isAuthConfigured) {
-    console.warn('Cognito is not configured: set VITE_COGNITO_USER_POOL_ID / VITE_COGNITO_USER_POOL_CLIENT_ID')
     return
   }
   Amplify.configure({

@@ -2,7 +2,7 @@
 id: T02-05
 title: "Personal page from Cognito attributes; API client with the access token; role from GET /api/me"
 phase: P2-authorization
-status: Todo
+status: In progress
 agent: frontend
 skills: [react-expert]
 depends_on: [T02-03, T02-04]
@@ -49,7 +49,20 @@ protected API, is the visible proof that the SPA reaches a Lambda in the VPC onl
 
 - [ ] Build green; tests green
 - [ ] AC-04.6, AC-04.7 verified against dev, evidence in Notes (no token values)
-- [ ] Skill file added
+- [x] Skill file added
 - [ ] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
+
+- 2026-11-12 — **Start gate not met, started on the owner's explicit request:** T02-03 (HTTP API) is not done and
+  T02-04 is in `Review`. Only the part that does not need the API is finished; the task stays `In progress`.
+- Implemented: `src/pages/MePage.tsx` (read-only `<dl>` from `fetchUserAttributes` via TanStack Query key
+  `['user-attributes']`; loading, error + "Retry" without stale data), `src/profile/format.ts` (date `DD/MM/YYYY`,
+  country "Name (CODE)", "—" for missing/unparseable, out-of-range values as stored, role line). API client:
+  `Authorization: Bearer <access token>` (was the ID token), `MeResponse` per spec 05 §Outputs, `meQueryKey`; the
+  role query runs only when `VITE_API_URL` is set, otherwise "Role: unavailable"; 401 → sign-out and `/sign-in`, not
+  retried. Vite `/api` proxy removed. Skill [spa-api-client](../../../.claude/skills/spa-api-client/SKILL.md) added.
+- Tests: `src/profile/format.test.ts` covers the display rules (date, country, missing, out-of-range, role lines) —
+  green. **Open:** page-state tests with mocked Amplify/API responses need React Testing Library + jsdom (new dev
+  dependencies, not added yet).
+- **Not verified:** AC-04.6, AC-04.7 (need the dev pool, T02-03 and `VITE_API_URL`).

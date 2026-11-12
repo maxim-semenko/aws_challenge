@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files (values live in docs/ENVIRONMENT.md)
+.env
+.env.*
