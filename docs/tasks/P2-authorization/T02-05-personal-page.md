@@ -1,31 +1,31 @@
 ---
 id: T02-05
-title: "Personal page from Cognito attributes; API client with the access token; role from GET /api/me"
+title: "Personal page (profile on Home) from Cognito attributes"
 phase: P2-authorization
-status: In progress
+status: Review
 agent: frontend
 skills: [react-expert]
-depends_on: [T02-03, T02-04]
+depends_on: [T02-04]
 blocked_by: []
 design: ../../design/authentication.md
-spec: [../../specs/04-user-registration-and-sign-in.md, ../../specs/05-protected-api.md]
-acceptance: [AC-04.6, AC-04.7]
+spec: ../../specs/04-user-registration-and-sign-in.md
+acceptance: [AC-04.6]
 ---
-# T02-05 — Personal page from Cognito attributes; API client with the access token; role from GET /api/me
+# T02-05 — Personal page (profile on Home) from Cognito attributes
 
 ## // BUSINESS CONTEXT
 
-W2-G2: after sign-in the user sees the own registration data and nothing to edit. The role line, read from the
-protected API, is the visible proof that the SPA reaches a Lambda in the VPC only with a valid token (W2-G3).
+W2-G2: after sign-in the user sees the own registration data and nothing to edit. (The role line from the protected
+API moved to Week 3 with `GET /api/me`, owner decision 2026-11-13.)
 
 ## // TECHNICAL CONSTRAINTS
 
 - ADR-013: profile values from `fetchUserAttributes` (Cognito), no database this week.
 - ADR-004: the API client sends `Authorization: Bearer <access token>` (fixes the ID token in the draft
   `frontend/src/api/client.ts`); base URL from `VITE_API_URL`.
-- `fetchUserAttributes` and `GET /api/me` through TanStack Query; the `me` response type exactly as spec 05 §Outputs.
+- `fetchUserAttributes` through TanStack Query (`GET /api/me` and its response type: Week 3).
 - Display rules and states exactly as spec 04 §Outputs and §Edge Cases; date shown `DD/MM/YYYY`; country as name +
-  code; role line from `groups`.
+  code; no role line (Week 3).
 - Read-only: no input, edit or save controls.
 - Only the `me` endpoint and its types change in the API client; remove the Vite `/api` proxy to `:8080` (the local
   backend no longer exists, ADR-015); other draft endpoints stay untouched.
@@ -34,23 +34,23 @@ protected API, is the visible proof that the SPA reaches a Lambda in the VPC onl
 ## // SCOPE
 
 **Implement**
-- Personal page at `/me`, API client token change, `me` response type per spec 05, Vite proxy removal
-- Tests for the page states (attributes loaded, attribute missing, attribute error, API error → "Role: unavailable")
-  with mocked Amplify/API responses
+- Personal page at `/me` (moved to Home `/`, owner 2026-11-13), API client token change, Vite proxy removal
+- Tests for the page states (attributes loaded, attribute missing, attribute error) with mocked Amplify responses
 - Skill file `spa-api-client` (base URL, token, error handling by status, TanStack Query keys; skills ownership rule)
 
 **Exclude**
-- Admin and chat pages, styling, profile editing
+- Role line and `GET /api/me` (Week 3, owner 2026-11-13; `api/client.ts` `me` and `profile/format.ts` `roleLine`
+  kept unused for Week 3), admin and chat pages, profile editing
 
 **Interfaces that must match**
-- Field names and types exactly as spec 05 §Outputs; attribute names as spec 04 §Inputs.
+- Attribute names as spec 04 §Inputs.
 
 ## Definition of Done
 
-- [ ] Build green; tests green
-- [ ] AC-04.6, AC-04.7 verified against dev, evidence in Notes (no token values)
+- [x] Build green; tests green (local, 2026-11-13, Notes); page-state component tests not done (Notes)
+- [x] AC-04.6 verified against dev, evidence in Notes
 - [x] Skill file added
-- [ ] Status updated here and in [PLAN.md](../../PLAN.md)
+- [x] Status updated here and in [PLAN.md](../../PLAN.md)
 
 ## Notes
 
@@ -90,3 +90,14 @@ protected API, is the visible proof that the SPA reaches a Lambda in the VPC onl
 - Evidence (2026-11-13, local): tests and build green; with `VITE_API_URL=https://dummy-api.invalid` and the public
   pool ids, `/admin` and `/chat` at 1280px and 360px show the placeholder with zero external requests and zero console
   messages (details in T02-04 Notes). Profile card layout **not verified** (needs a signed-in session).
+- 2026-11-13 — **Owner decision: Week 2 = the curriculum topic only.** The role line is gone from the SPA (the owner
+  removed `RoleLineView` from `profile/Profile.tsx`; `api/client.ts` `me` and `profile/format.ts` `roleLine` stay
+  unused for Week 3). AC-04.7 withdrawn; dependency on T02-03 and spec 05 removed from this task.
+- **AC-04.6 — pass (owner evidence, deployed site):** the owner's screenshot of the signed-in profile card on Home
+  shows all eight values; the owner confirmed "everything works". Details of the AC (date `DD/MM/YYYY`, country as
+  name + code, no input/edit/save control) are re-checked from that screenshot by T02-06.
+- **Not done:** the page-state component tests (attributes loaded / missing / error with mocked Amplify) — they need
+  React Testing Library + jsdom (new dev dependencies). The display rules are covered by `profile/format.test.ts`.
+  Proposal: move the component tests to the first Week 3 frontend task (owner decides at the review).
+- Evidence (2026-11-13, local, after the owner's `Profile.tsx` change): `npm test` 5 files, 48 tests passed;
+  `npm run build` green (JS 451.5 kB).

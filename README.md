@@ -15,7 +15,7 @@ aws_challenge/
 ├── amplify.yml          Amplify Hosting build spec (monorepo, appRoot = frontend)
 ├── docker-compose.yml   local PostgreSQL + pgvector
 ├── frontend/            React SPA
-└── lambdas/             Python Lambda functions (from T02-02; until then the code lives only in AWS)
+└── lambdas/             Python Lambda functions (from Week 3; until then the code lives only in AWS)
 ```
 
 ## Run locally

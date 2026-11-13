@@ -73,7 +73,7 @@ Environment variables (no secret values): `DB_PROXY_ENDPOINT`, `DB_NAME`, `DB_SE
 ## Affected Components
 
 AWS resources only (VPC, subnets, NAT, security groups, RDS, secret, RDS Proxy, three functions, log groups); the
-function code lives in the console until it is brought into Git (`admin`: T02-02; [R-15](../RISKS.md#2-risk-register)).
+function code lives in the console until it is brought into Git (`admin`: Week 3; [R-15](../RISKS.md#2-risk-register)).
 
 ## Security Considerations
 

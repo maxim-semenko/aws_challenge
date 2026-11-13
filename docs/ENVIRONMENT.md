@@ -57,9 +57,22 @@ Source: the owner's console screenshots, 2026-11-12. App `aws_challenge`, all br
 | `VITE_AWS_REGION` | `eu-west-1` |
 | `VITE_USER_POOL_ID` | User Pool id above |
 | `VITE_USER_POOL_CLIENT_ID` | App client id above |
+| `VITE_API_URL` | HTTP API endpoint below |
 
 The SPA reads exactly these names (`frontend/src/config/amplify.ts`, aligned by T02-04; no default region).
-`VITE_API_URL` is not set yet (T02-03).
+
+## HTTP API (Week 2)
+
+Source: the owner's console screenshots, 2026-11-13; unauthenticated probes of the public endpoint the same day
+(`/admin` without a token → 401; CORS preflight from the Amplify origin → 204).
+
+| Item | Value |
+|---|---|
+| API | `aws-challenge-api`, id `o6cpz238i3`, HTTP API, stage `$default` |
+| Endpoint | `https://o6cpz238i3.execute-api.eu-west-1.amazonaws.com` |
+| Authorizer | `cognito-jwt-authorizer` (id `fvppl3`), JWT; identity source `$request.header.Authorization`; issuer = Issuer above; audience = App client id above |
+| Routes | `GET /admin` (JWT), `POST /chat` (JWT, integration `dyujbqp`); no authorization scopes. Changed from `ANY` on 2026-11-13 because `ANY` caught the CORS preflight (T02-03 Notes) |
+| CORS | origin `https://main.d67fa9mmezz1k.amplifyapp.com`; headers `authorization`, `content-type`; methods `*`; max age 0; credentials no |
 
 ## Not recorded yet
 

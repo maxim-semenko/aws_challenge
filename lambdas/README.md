@@ -5,7 +5,7 @@ deployed; the deployed names and settings are in [docs/ENVIRONMENT.md](../docs/E
 
 | Directory | Function | Purpose |
 |---|---|---|
-| `admin/` | `aws-challenge-admin` | API for the SPA: `GET /api/me`, `GET /api/admin/ping` (T02-02); admin queries from Week 3 |
+| `admin/` | `aws-challenge-admin` | API for the SPA and admin queries (Week 3) |
 | `chatbot/` | `aws-challenge-chatbot` | natural-language search through Bedrock (Week 5) |
 | `sync/` | `aws-challenge-sync` | copies Cognito users into PostgreSQL (Week 3) |
 

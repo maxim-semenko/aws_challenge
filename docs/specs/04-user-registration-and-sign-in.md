@@ -1,15 +1,17 @@
 # Spec 04 — User registration, sign-in and personal page
 
-Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, W2-G4 (role), S1–S3 ·
+Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, S1–S3 ·
 Design: [authentication](../design/authentication.md)
-Tasks: T02-01, T02-03, T02-04, T02-05, T02-06
+Tasks: T02-01, T02-04, T02-05, T02-06
+
+Reduced 2026-11-13 (owner: Week 2 = the curriculum topic only): the group `admin` and the role line on the profile
+(`GET /api/me`) are **moved to Week 3** (AC-04.3 and AC-04.7 withdrawn).
 
 ## Purpose
 
 A visitor registers in the SPA with all required profile fields; the owner activates (confirms) the new account in the
 Cognito console (owner decision 2026-11-13, no code confirmation in the SPA); the user signs in and out through
-Amplify Auth against the Cognito User Pool and sees the own registration data, read-only, on Home `/` (ADR-013). The
-`admin` group exists and has at least one member.
+Amplify Auth against the Cognito User Pool and sees the own registration data, read-only, on Home `/` (ADR-013).
 
 ## Inputs
 
@@ -46,7 +48,7 @@ confirmation code (owner decision 2026-11-13).
 | `VITE_AWS_REGION` | the region of the Week 1 build (ADR-009) | yes for auth |
 | `VITE_USER_POOL_ID` | `<region>_<id>` of `aws-challenge-users` | yes for auth |
 | `VITE_USER_POOL_CLIENT_ID` | id of app client `aws-challenge-frontend-spa` | yes for auth |
-| `VITE_API_URL` | invoke URL of `aws-challenge-api` (spec 05) | yes for the role line on Home and for any API call; empty = no API request at all |
+| `VITE_API_URL` | invoke URL of `aws-challenge-api` (spec 05) | no — read by no Week 2 screen (the first API call from the SPA is Week 3); set or empty, the SPA makes no API request |
 
 **User Pool configuration** (T02-01): as in [design/authentication](../design/authentication.md) §Proposed Solution;
 attributes per the column "Cognito definition" above.
@@ -58,9 +60,8 @@ attributes per the column "Cognito definition" above.
 | Sign-up result | message "Account created. It will be activated by an administrator; then you can sign in." with a link to `/sign-in` | shown after a successful `signUp`; Cognito user status `UNCONFIRMED` until the owner confirms it |
 | Cognito user after activation by the owner | status `CONFIRMED`, the attributes from §Inputs with the values entered | `birthdate` in `YYYY-MM-DD`; `email_verified` is not guaranteed (no code is entered) |
 | Session after sign-in | ID, access and refresh tokens held by Amplify | tokens never written to the console or logs |
-| Profile on Home `/` (signed in) | read-only list: First name, Last name, Email, Gender, Date of birth (`DD/MM/YYYY`), Country (name + code), Height (cm), Weight (kg); line "Role: administrator" or "Role: user" only when `VITE_API_URL` is set | profile values from `fetchUserAttributes`; role from `groups` of `GET /api/me` (spec 05); no input elements, no edit or save action |
+| Profile on Home `/` (signed in) | read-only list: First name, Last name, Email, Gender, Date of birth (`DD/MM/YYYY`), Country (name + code), Height (cm), Weight (kg) | profile values from `fetchUserAttributes`; no role line (Week 3); no input elements, no edit or save action |
 | Home `/` (anonymous) | short intro; links to `/sign-in` and `/sign-up` when auth is configured | no profile data, no API request |
-| Group `admin` | Cognito group with ≥ 1 member (the owner) | assigned only by the owner in the Cognito console |
 
 ## Behaviour
 
@@ -72,15 +73,13 @@ attributes per the column "Cognito definition" above.
 3. The owner confirms the user in the Cognito console ("Confirm account"). While Cognito-assisted verification is on,
    Cognito may still e-mail a code; it is not used (the owner may switch the verification off).
 4. The user signs in with e-mail and password (SRP); the SPA navigates to Home `/`.
-5. Home `/` shows the signed-in user's profile: attributes from `fetchUserAttributes` through TanStack Query; when
-   `VITE_API_URL` is set, also `GET /api/me` with the **access** token (ADR-004) for the role line.
+5. Home `/` shows the signed-in user's profile: attributes from `fetchUserAttributes` through TanStack Query.
 6. "Sign out" calls `signOut`; tokens are removed; the SPA navigates to `/sign-in`.
 7. Without a session Home `/` shows the intro with sign-in / sign-up links and no profile data. `/me` and `/confirm`
    no longer exist; like every unknown path they redirect to `/`. Chat and Admin nav links are shown only to a
    signed-in user.
 8. With empty `VITE_AWS_REGION` / `VITE_USER_POOL_*` values the auth routes and links are hidden and the home page renders (spec 01).
-9. With empty `VITE_API_URL` the SPA makes no API request: no role line on Home; `/chat` and `/admin` show
-   "Not available yet".
+9. The SPA makes no API request, whatever `VITE_API_URL` is; `/chat` and `/admin` show "Not available yet".
 
 ## Edge Cases / Failure Modes
 
@@ -94,9 +93,6 @@ attributes per the column "Cognito definition" above.
 | An attribute missing or not parseable in Cognito (e.g. created outside the SPA) | the field shows "—"; the page does not crash |
 | An attribute outside the SPA ranges, stored by a direct `SignUp` call (Q-14 C) | the stored value is shown as is (read-only); the page does not crash |
 | `fetchUserAttributes` fails (network) | error message with a retry button; no stale data shown as current |
-| `GET /api/me` → 401 (token expired and refresh failed) | session cleared, redirect to `/sign-in` |
-| `GET /api/me` → 5xx / network error | profile still shown; role line shows "Role: unavailable" |
-| `VITE_API_URL` empty | profile still shown; no role line and no request to the API |
 | Too many attempts (`LimitExceededException`) | generic "Too many attempts, try later" |
 
 ## Acceptance Criteria
@@ -104,16 +100,17 @@ attributes per the column "Cognito definition" above.
 AWS-side criteria are verified from evidence the owner provides (console screenshots, or outputs of commands the
 owner runs); agents have no AWS access (CLAUDE.md §3.11). AC-04.4, AC-04.10 and AC-04.11 are verified locally.
 
-- [ ] AC-04.1 The User Pool `aws-challenge-users` shows: `UsernameAttributes=[email]`, `AutoVerifiedAttributes=[email]`
-  (or empty if the owner switches off Cognito-assisted verification, decision 2026-11-13),
-  self sign-up allowed, deletion protection active, required standard attributes `email`, `given_name`,
-  `family_name`, `gender`, `birthdate`, and custom attributes `country` (String), `height` (Number), `weight`
+- [ ] AC-04.1 The User Pool `aws-challenge-users` shows: `UsernameAttributes=[email]` (e-mail verification is not
+  checked: the owner confirms users in the console, decision 2026-11-13), self sign-up allowed, deletion protection
+  active, required standard attributes `email`, `given_name`, `family_name`, `gender`, `birthdate`, and custom attributes `country` (String), `height` (Number), `weight`
   (Number) created without min/max constraints (Q-14 C: the runbook leaves the min/max fields empty;
   `height`/`weight` show no min/max value; Cognito defaults, if shown, are accepted); no Lambda triggers
-- [ ] AC-04.2 The app client `aws-challenge-frontend-spa` shows no client secret, explicit auth flows exactly
-  `ALLOW_USER_SRP_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH`, `PreventUserExistenceErrors=ENABLED`, token validity as in
-  ARCHITECTURE §3.4, read and write permission on every registration attribute
-- [ ] AC-04.3 Group `admin` exists and lists the owner's account as a member
+- [ ] AC-04.2 The app client `aws-challenge-frontend-spa` shows no client secret, explicit auth flows
+  `ALLOW_USER_SRP_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH` (plus `ALLOW_USER_AUTH` with password only, accepted as built
+  2026-11-13; no other flow), `PreventUserExistenceErrors=ENABLED`, token validity as in ARCHITECTURE §3.4, read and
+  write permission on every registration attribute (a sign-up through the SPA that stores all eight values and a
+  profile that shows them count as evidence)
+- ~~AC-04.3~~ *Withdrawn 2026-11-13 — group `admin` moved to Week 3.*
 - [ ] AC-04.4 The sign-up form (the only enforcement of the ranges, Q-14 C) rejects, without a network call to
   Cognito, each of: empty first name, gender `X`,
   date `31/02/2000`, a date less than 13 years ago, height `49`, height `170.5`, weight `301`, mismatched password
@@ -124,9 +121,7 @@ owner runs); agents have no AWS access (CLAUDE.md §3.11). AC-04.4, AC-04.10 and
   console ("Confirm account") and it then shows `UserStatus=CONFIRMED`
 - [ ] AC-04.6 Sign-in with that confirmed account lands on Home `/`, which shows all eight values (date as
   `DD/MM/YYYY`, country as name + code) and contains no input, edit or save control
-- [ ] AC-04.7 With `VITE_API_URL` set, the request `GET /api/me` from the SPA carries `Authorization: Bearer <token>`
-  whose decoded payload has `token_use=access`; Home shows "Role: administrator" for a member of `admin` and
-  "Role: user" otherwise
+- ~~AC-04.7~~ *Withdrawn 2026-11-13 — role line from `GET /api/me` moved to Week 3.*
 - [ ] AC-04.8 Without a session Home `/` shows the intro with sign-in / sign-up links and no profile data; `/me`
   redirects to `/`; after sign-out the SPA is on `/sign-in` and Home shows no profile data again
 - [ ] AC-04.9 Signing in with an account the owner has not confirmed yet shows "Your account is not activated yet"

@@ -2,11 +2,12 @@
 
 Status: **Accepted** (2026-11-12, owner), with ADR-004; Q-14 answered (option C). Amended 2026-11-13 by owner
 decisions: no code confirmation in the SPA (the owner confirms users in the console); the profile moved from `/me` to
-Home `/`.
-Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, W2-G4 (role), S1–S3 ·
+Home `/`. Amended 2026-11-13 (owner: Week 2 = the curriculum topic only): the group `admin`, the first administrator
+and the role line from `GET /api/me` moved to Week 3.
+Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, S1–S3 ·
 Spec: [04-user-registration-and-sign-in](../specs/04-user-registration-and-sign-in.md)
 Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.1, §3.4, §5.1, ADR-004, ADR-013, ADR-014, goal G3
-Related design: [api-gateway-auth](api-gateway-auth.md) (HTTP API, `/api/me`)
+Related design: [api-gateway-auth](api-gateway-auth.md) (HTTP API)
 
 ## Problem Statement
 
@@ -23,7 +24,6 @@ PostgreSQL is Week 3 (curriculum), so this week Cognito is the only store of the
 sequenceDiagram
     participant B as Browser (SPA)
     participant C as Cognito User Pool
-    participant A as HTTP API + admin Lambda
     participant O as Owner (Cognito console)
     B->>C: SignUp(email, password, attributes)
     C-->>B: user UNCONFIRMED ("activated by an administrator")
@@ -32,8 +32,6 @@ sequenceDiagram
     C-->>B: ID, access, refresh tokens
     B->>C: GetUser (fetchUserAttributes, access token)
     C-->>B: profile attributes
-    B->>A: GET /api/me, Authorization: Bearer <access token>
-    A-->>B: id, groups (role line)
 ```
 
 **User Pool** (`aws-challenge-users`, region per ADR-009; created by the owner in the console from the T02-01
@@ -41,7 +39,7 @@ runbook, Q-12 C):
 
 | Setting | Value |
 |---|---|
-| Feature plan | Lite (no managed login, no threat protection needed); confirm the plan name and price at creation |
+| Feature plan | Lite (no managed login, no threat protection needed); confirm the plan name and price at creation. As built: Essentials (ENVIRONMENT.md), accepted — same free tier, see §Cost |
 | Sign-in | e-mail is the username attribute (`UsernameAttributes=[email]`), case-insensitive |
 | Self sign-up | enabled; new users stay `UNCONFIRMED` until the owner confirms them in the console ("Confirm account"; owner decision 2026-11-13). Cognito-assisted verification of `email` (`AutoVerifiedAttributes=[email]`) is still on as built, so Cognito may e-mail a code that the SPA never asks for; the owner may switch it off |
 | Password policy | Cognito default (ARCHITECTURE §3.4) |
@@ -49,24 +47,23 @@ runbook, Q-12 C):
 | E-mail sender | Cognito default sender ([R-13](../RISKS.md#2-risk-register)) |
 | MFA, social logins, hosted UI | off (out of scope, ARCHITECTURE §1) |
 | Deletion protection | on (the schema is immutable; an accidental delete loses every user) |
-| Group | `admin` |
+| Group | `admin` — moved to Week 3 (2026-11-13) |
 | Lambda triggers | none in Week 2 (the sync chain is Week 3) |
 
-**App client** `aws-challenge-frontend-spa`: public (no secret); auth flows `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`;
-prevent user existence errors on; token validity per ARCHITECTURE §3.4; read and write permission on every
+**App client** `aws-challenge-frontend-spa`: public (no secret); auth flows `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`
+(as built also `ALLOW_USER_AUTH`, choice-based sign-in limited to password — accepted 2026-11-13: the SPA uses SRP, the
+extra flow allows no factor beyond the password); prevent user existence errors on; token validity per ARCHITECTURE §3.4; read and write permission on every
 registration attribute (write is needed by `SignUp`, read by `fetchUserAttributes`; consequence
 [R-12](../RISKS.md#2-risk-register)).
 
-**First administrator:** the owner signs up through the SPA (or creates the user in the Cognito console if the
-screens are not ready yet), then adds it to the group `admin` in the Cognito console (T02-03 runbook). The group
-appears in tokens after the next sign-in or token refresh.
+**First administrator:** moved to Week 3 together with the group `admin` (2026-11-13).
 
 **SPA (ADR-014):** own screens on `aws-amplify/auth`; `@aws-amplify/ui-react` removed. No styling beyond semantic
 HTML until the design system exists (CLAUDE.md §5).
 
 | Route | Access | Content |
 |---|---|---|
-| `/` | public | signed in: the personal profile — the 8 fields from `fetchUserAttributes`, date shown as `DD/MM/YYYY`, role line from `GET /api/me` only when `VITE_API_URL` is set, read-only; anonymous: short intro with sign-in / sign-up links |
+| `/` | public | signed in: the personal profile — the 8 fields from `fetchUserAttributes`, date shown as `DD/MM/YYYY`, read-only (role line: Week 3); anonymous: short intro with sign-in / sign-up links |
 | `/sign-up` | anonymous only | form with the 8 fields + password + password confirmation; client-side validation per spec 04; on success the message "activated by an administrator" with a link to sign-in |
 | `/sign-in` | anonymous only | e-mail + password; an unconfirmed user sees "Your account is not activated yet" and stays on the page |
 | `/me`, `/confirm` | — | removed (owner decision 2026-11-13); redirect to `/` |
@@ -80,8 +77,8 @@ HTML until the design system exists (CLAUDE.md §5).
   for a confirmation code; the owner confirms each new user in the Cognito console.
 - The date of birth is entered as `DD/MM/YYYY` and sent to Cognito as `YYYY-MM-DD`; the country is a select of
   ISO 3166-1 alpha-2 codes, names via `Intl.DisplayNames` (no hand-written name list).
-- The API client sends the **access** token (ADR-004); `fetchUserAttributes` and `/api/me` are read through
-  TanStack Query. The role line is the visible proof of the chain SPA → API Gateway → Lambda.
+- `fetchUserAttributes` is read through TanStack Query. The API client (sends the **access** token, ADR-004) is kept
+  for Week 3; no Week 2 screen calls the API.
 
 ## Alternatives Considered
 
@@ -98,8 +95,8 @@ HTML until the design system exists (CLAUDE.md §5).
 | Personal page data | `fetchUserAttributes` (Cognito `GetUser` with the access token) | always current; standard Amplify API; no backend needed | one Cognito call per page load | **proposed** |
 | Personal page data | ID token claims (`fetchAuthSession().tokens.idToken.payload`) | no network call | values frozen until the token is refreshed; custom attributes as strings | alternative |
 | Personal page data | `GET /api/me` from a PostgreSQL copy | one read path for user and admin | the copy is Week 3 (curriculum) | moved to Week 3 (ADR-013) |
-| Role on the personal page | `groups` from `GET /api/me` | exercises the protected API from the SPA | page depends on the API for one line | **proposed** |
-| Role on the personal page | `cognito:groups` from the access token in the SPA | no API call | the SPA never calls the API in Week 2 | alternative |
+| Role on the personal page | `groups` from `GET /api/me` | exercises the protected API from the SPA | page depends on the API for one line | moved to Week 3 (2026-11-13) |
+| Role on the personal page | `cognito:groups` from the access token in the SPA | no API call | the SPA never calls the API in Week 2 | moved to Week 3 (2026-11-13) |
 | Field validation (Q-14) | A: SPA + min/max constraints on the custom attributes in Cognito | Cognito rejects out-of-range custom values | ranges frozen with the pool; `gender`/`birthdate` still unchecked server-side | rejected |
 | Field validation (Q-14) | B: A + PreSignUp Lambda trigger validating every field | true server-side validation | extra synchronous trigger (5 s limit) and function, beyond the week topic | rejected |
 | Field validation (Q-14) | C: SPA only; custom attributes without min/max in Cognito | ranges can change later without a new pool | no server-side bound at all (§Security Considerations) | **accepted** (owner, 2026-11-12) |
@@ -115,7 +112,7 @@ through `aws-amplify/auth`: `signUp`, `signIn`, `signOut`, `fetchAuthSession`, `
 
 ## Affected Components
 
-New: Cognito User Pool, app client, group `admin` (T02-01); skill files `cognito-user-pool`, `amplify-auth`,
+New: Cognito User Pool, app client (T02-01); skill files `cognito-user-pool`, `amplify-auth`,
 `spa-api-client`. Changed: `frontend/src` (Amplify config, routes, auth screens, personal page, API client),
 `frontend/package.json` (remove `@aws-amplify/ui-react`), `frontend/vite.config.ts` (remove the `/api` proxy to the
 deleted local backend), Amplify Hosting environment variables.
@@ -140,8 +137,8 @@ deleted local backend), Amplify Hosting environment variables.
 
 ## Cost
 
-No always-on resources. Cognito Lite: free up to 10 000 monthly active users (AWS pricing page, to be re-checked at
-creation); the learning workload stays far below. Default e-mail sender: no charge.
+No always-on resources. Cognito Lite and Essentials (as built): free up to 10 000 monthly active users (AWS pricing
+page, to be re-checked by the owner in the billing console); the learning workload stays far below, so ≈ $0/month. Default e-mail sender: no charge.
 
 ## Open Questions
 

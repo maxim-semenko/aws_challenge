@@ -128,3 +128,12 @@ rules must match spec 04 exactly.
   https://dummy-api.invalid` (temporary build) → intro card with both buttons, sign-in / sign-up cards render; in both
   builds zero console messages, zero external requests, no horizontal overflow at 360px. Screenshots checked by eye.
   **Not verified:** the signed-in profile card (needs a session in the dev pool).
+- 2026-11-13 — **Owner evidence on the deployed site** (Amplify domain, dev User Pool): the owner reports that
+  sign-up and sign-in work ("everything works"); a user signed up through the SPA, confirmed by the owner in the
+  Cognito console, signed in and landed on Home with the profile (owner's screenshot, T02-05 Notes).
+  - **AC-04.5** — pass as reported (sign-up through the SPA → owner confirms in the console → sign-in works). Not
+    separately evidenced: the exact message text and the `UNCONFIRMED` → `CONFIRMED` status in the console
+    (collected by T02-06).
+  - **AC-04.8**, **AC-04.9** — **not verified** on the deployed site (sign-out landing on `/sign-in`; message for an
+    account not confirmed yet) — collected by T02-06.
+  - Week 2 reduced to the curriculum topic (owner, 2026-11-13): no change to this task's ACs.

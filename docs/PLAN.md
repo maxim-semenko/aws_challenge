@@ -2,7 +2,7 @@
 
 Related: [CLAUDE.md](../CLAUDE.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [RISKS.md](RISKS.md) ·
 [requirements/](requirements/) · [design/](design/) · [specs/](specs/) · [tasks/](tasks/)
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 ## How the plan works
 
@@ -27,7 +27,7 @@ Last updated: 2026-11-12
 |---|---|---|---|---|
 | **P0-foundation** | 1 | account and local access, Git repository, SPA that builds and renders without config; later: IaC import (T00-03) | [spa-hosting](design/spa-hosting.md), [backend-foundation](design/backend-foundation.md) | [01](specs/01-spa-delivery.md), [02](specs/02-database-connectivity.md), [03](specs/03-local-aws-access.md) |
 | **P1-environment** | 1 | SPA on Amplify/CloudFront; VPC, RDS, RDS Proxy; three Python Lambdas with logs; `SELECT 1` through the proxy — built manually by the owner, accepted 2026-11-12 | same | same |
-| **P2-authorization** | 2 | Cognito User Pool + own Amplify Auth screens, personal page from Cognito attributes, HTTP API with JWT authorizer, `admin` group, Admin Lambda code in Git | [authentication](design/authentication.md), [api-gateway-auth](design/api-gateway-auth.md) | [04](specs/04-user-registration-and-sign-in.md), [05](specs/05-protected-api.md) |
+| **P2-authorization** | 2 | Curriculum topic only (owner, 2026-11-13): Cognito User Pool + own Amplify Auth screens, personal page from Cognito attributes, HTTP API with JWT authorizer (built by the owner). `admin` group, Admin Lambda code, `/api/...` endpoints and the role line moved to Week 3 | [authentication](design/authentication.md), [api-gateway-auth](design/api-gateway-auth.md) | [04](specs/04-user-registration-and-sign-in.md), [05](specs/05-protected-api.md) |
 | P3+ | 3+ | planned when the next week's requirements arrive (curriculum overview: ARCHITECTURE §1.1) | — | — |
 
 Week 1 (built manually; accepted by the owner 2026-11-12):
@@ -46,21 +46,20 @@ Week 2:
 ```mermaid
 flowchart LR
     T0001[T00-01 account] --> T0201[T02-01 User Pool]
-    T0104[T01-04 Lambdas] --> T0202[T02-02 admin handler in Git]
-    T0104 --> T0203
-    T0201 --> T0203[T02-03 HTTP API + JWT, deploy, first admin]
-    T0202 --> T0203
+    T0104[T01-04 Lambdas] --> T0203
+    T0201 --> T0203[T02-03 HTTP API + JWT authorizer]
     T0004[T00-04 SPA build] --> T0204[T02-04 auth screens]
     T0201 --> T0204
-    T0203 --> T0205[T02-05 personal page + API client]
-    T0204 --> T0205
-    T0203 --> T0206[T02-06 acceptance]
+    T0204 --> T0205[T02-05 profile on Home]
+    T0201 --> T0206[T02-06 acceptance]
+    T0203 --> T0206
+    T0204 --> T0206
     T0205 --> T0206
 ```
 
-Lanes: **devops** T02-01 → T02-03 · **backend** T02-02 · **frontend** T02-04 → T02-05 · **tester** T02-06 at the end.
+Lanes: **devops** T02-01 → T02-03 · **frontend** T02-04 → T02-05 · **tester** T02-06 at the end.
 
-## Current state (2026-11-12)
+## Current state (2026-11-13)
 
 **Week 1** is `Done`: built manually in the AWS console by the owner and accepted on 2026-11-12 (T00-01, T00-02,
 T00-04, T01-01, T01-02, T01-04, T01-05, T01-06; design docs spa-hosting and backend-foundation `Accepted`). The known
@@ -68,11 +67,15 @@ facts of the build (region `eu-west-1`, VPC, subnets) are in [ARCHITECTURE §4](
 gateway is shown ([R-09](RISKS.md#2-risk-register), not blocking Week 2). IaC ACs (AC-01.4, AC-02.9) stay with
 T00-03 (`Blocked` by Q-02). Agents have no AWS access (CLAUDE.md §3.11).
 
-**Week 2** (authorization, 6 tasks in P2-authorization): design docs and ADR-004 `Accepted`, no task blocked.
-**Startable now:** T02-01 (In progress — pool and app client created by the owner, ids in [ENVIRONMENT.md](ENVIRONMENT.md); waiting for the schema evidence) and T02-02 (backend — needs the owner's
-export of the `admin` deployment package). T02-04 in `Review` and T02-05 `In progress` (started early on the owner's
-request; API part waits for T02-03). Next: T02-03 after T02-01 and T02-02. User sync to
-PostgreSQL, the users table and migrations are Week 3.
+**Week 2** (authorization, 5 tasks in P2-authorization) is **nearly complete**. Scope reduced on 2026-11-13 by the
+owner to the curriculum topic (User Pool + Amplify Auth, HTTP API with JWT authorizer); everything else moved to
+Week 3. Pool, app client and HTTP API built by the owner (identifiers in [ENVIRONMENT.md](ENVIRONMENT.md)); the
+deployed SPA signs up, signs in and shows the profile. T02-03, T02-04, T02-05 in `Review`; T02-01 `In progress`
+(one screenshot of the pool's Lambda triggers page). Skill files `cognito-user-pool` and `http-api-jwt` written
+(2026-11-13, ARCH review pending). **Remaining:** that screenshot, the architect review of T02-01/T02-03, then
+acceptance T02-06. Week 3 (not planned yet) receives: Admin Lambda code in Git, `/api/me`,
+`/api/admin/ping`, group `admin` and 403, role line, API/handler logs, user sync to PostgreSQL, users table,
+migrations.
 
 ## Task index
 
@@ -99,12 +102,11 @@ PostgreSQL, the users table and migrations are Week 3.
 
 | ID | Task | Agent | Skills | Depends on | Blocked by | Design | Spec | Status |
 |---|---|---|---|---|---|---|---|---|
-| [T02-01](tasks/P2-authorization/T02-01-cognito-user-pool.md) | Cognito User Pool, SPA app client and group admin | devops | cloud-architect | T00-01 | — | authentication | 04 | In progress |
-| [T02-02](tasks/P2-authorization/T02-02-admin-api-handler.md) | Admin Lambda in Git (Python): GET /api/me and GET /api/admin/ping | backend | test-master | T01-04 | — | api-gateway-auth | 05 | Todo |
-| [T02-03](tasks/P2-authorization/T02-03-http-api-jwt.md) | HTTP API with Cognito JWT authorizer, routes, CORS, access logs; deploy admin; first admin | devops | cloud-architect | T01-04, T02-01, T02-02 | — | api-gateway-auth | 05, 04 | Todo |
+| [T02-01](tasks/P2-authorization/T02-01-cognito-user-pool.md) | Cognito User Pool and SPA app client | devops | cloud-architect, cognito-user-pool | T00-01 | — | authentication | 04 | In progress |
+| [T02-03](tasks/P2-authorization/T02-03-http-api-jwt.md) | HTTP API with Cognito JWT authorizer (built by the owner) | devops | cloud-architect, http-api-jwt | T01-04, T02-01 | — | api-gateway-auth | 05 | Review |
 | [T02-04](tasks/P2-authorization/T02-04-auth-screens.md) | Amplify Auth config, sign-up / confirm / sign-in / sign-out screens, route guard | frontend | react-expert | T00-04, T02-01 | — | authentication | 04 | Review |
-| [T02-05](tasks/P2-authorization/T02-05-personal-page.md) | Personal page from Cognito attributes; API client with the access token; role from GET /api/me | frontend | react-expert | T02-03, T02-04 | — | authentication | 04, 05 | In progress |
-| [T02-06](tasks/P2-authorization/T02-06-week-2-acceptance.md) | Week 2 acceptance check | tester | test-master | T02-03, T02-05 | — | — | 04, 05 | Todo |
+| [T02-05](tasks/P2-authorization/T02-05-personal-page.md) | Personal page (profile on Home) from Cognito attributes | frontend | react-expert | T02-04 | — | authentication | 04 | Review |
+| [T02-06](tasks/P2-authorization/T02-06-week-2-acceptance.md) | Week 2 acceptance check | tester | test-master | T02-01, T02-03, T02-04, T02-05 | — | — | 04, 05 | Todo |
 
 ## Change log
 
@@ -121,3 +123,4 @@ PostgreSQL, the users table and migrations are Week 3.
 | 2026-11-12 | `docs/ENVIRONMENT.md` added as the single home of the as-built resource identifiers (moved from ARCHITECTURE §4.1); Cognito pool and app client ids recorded; `lambdas/admin`, `lambdas/chatbot`, `lambdas/sync` created for the function code. T02-01 → `In progress` |
 | 2026-11-13 | Owner decisions after testing the deployed SPA: **no code confirmation in the SPA** (the owner confirms new users in the Cognito console; `/confirm` removed; sign-up shows "activated by an administrator", unconfirmed sign-in shows "not activated yet"); **profile on Home `/`** (`/me` and "My page" removed); **no API request without `VITE_API_URL`** (draft health/claims blocks removed from Home, `/chat` and `/admin` show "Not available yet", Chat/Admin links only when signed in). Spec 04, design authentication, ARCHITECTURE §3.1, skills `amplify-auth` and `spa-api-client`, T02-04 and T02-05 Notes updated. Statuses unchanged: T02-04 `Review`, T02-05 `In progress` |
 | 2026-11-13 | Owner requests: **layout** (centered header/main, card layout for profile, sign-in, sign-up and the Home intro; plain CSS, values once as custom properties in `index.css`, responsive to 360px); **Admin/Chat placeholders** ("Not available yet — coming in a later week", no request whatever `VITE_API_URL` is — fixes "Failed to fetch" from the non-existent `GET /api/admin/users`); draft client endpoints `health`, `search`, `users` removed. T02-04, T02-05 Notes, skill `spa-api-client`, design authentication updated; spec 04 unchanged. Statuses unchanged |
+| 2026-11-13 | **Owner decision: Week 2 = the curriculum topic only** (Cognito User Pool + Amplify Auth; HTTP API with a Cognito JWT authorizer, built by the owner in the console — ENVIRONMENT.md §HTTP API). Moved to Week 3: W2-G4, S5, S7 (requirements marked), group `admin`, Admin Lambda code with `GET /api/me` / `GET /api/admin/ping`, problem+json, role line (removed from the SPA by the owner), access log. **T02-02 deleted** (Week 3 planning recreates the Admin Lambda task). Spec 05 reduced to the authorizer (AC-05.1…05.6, renumbered); spec 04 AC-04.3, AC-04.7 withdrawn, AC-04.1 (no e-mail verification check) and AC-04.2 (`ALLOW_USER_AUTH` accepted) amended; design api-gateway-auth amended to the as-built API (`/api` prefix and explicit routes: open point for Week 3), design authentication amended; ARCHITECTURE §3.2–3.4, §5.1, §6, ADR-013 note, §12; R-09, R-15 reworded. T02-03 rewritten ("built by the owner") → `Review`; T02-05 → `Review` (AC-04.6 from the owner's screenshot); T02-04 owner evidence added (`Review`); T02-01 stays `In progress` (Lambda-triggers screenshot, skill file); T02-06 rewritten to the reduced scope |

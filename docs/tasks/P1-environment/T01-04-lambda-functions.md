@@ -42,7 +42,7 @@ investigated (S7).
 - Skill file `lambda-functions` (runtime, roles, log groups, how to add a function; skills ownership rule)
 
 **Exclude**
-- API Gateway, `migrate` function, bringing the code into Git (`admin`: T02-02)
+- API Gateway, `migrate` function, bringing the code into Git (`admin`: Week 3)
 
 **Interfaces that must match**
 - Function names per ARCHITECTURE §4 (`aws-challenge-<function>`).

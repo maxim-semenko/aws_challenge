@@ -1,110 +1,77 @@
-# Spec 05 — Protected API: HTTP API, JWT authorizer, `/api/me`, admin probe
+# Spec 05 — Protected API: HTTP API with a Cognito JWT authorizer
 
-Requirements: [week-02](../requirements/week-02-authorization.md) W2-G3, W2-G4, S4, S5, S7 ·
+Requirements: [week-02](../requirements/week-02-authorization.md) W2-G3, S4 ·
 Design: [api-gateway-auth](../design/api-gateway-auth.md)
-Tasks: T02-02, T02-03, T02-05, T02-06
+Tasks: T02-03, T02-06
+
+Reduced 2026-11-13 (owner: Week 2 = the curriculum topic only). **Moved to Week 3** and specified there: the `admin`
+Lambda code in Git, `GET /api/me`, `GET /api/admin/ping`, the `admin` group check (403), the `token_use` check, the
+handler's `application/problem+json` errors, the role line in the SPA, the API access log and the log-content checks.
 
 ## Purpose
 
-Only requests with a valid Cognito access token reach the `admin` Lambda; the caller can read who the API thinks they
-are; one route is reserved for the `admin` group; every request is traceable in CloudWatch without tokens or personal
-data.
+The HTTP API `aws-challenge-api`, built by the owner in the console, is the only public door to the functions: a
+request without a valid Cognito token of the pool `aws-challenge-users` / app client `aws-challenge-frontend-spa` is
+rejected by API Gateway with 401 before any integration runs, a request with a valid access token reaches the route's
+integration, and the SPA origin passes the CORS preflight. What the integrations return is not part of Week 2.
 
 ## Inputs
 
 | Name | Type | Valid range | Required |
 |---|---|---|---|
-| `Authorization` header | string | `Bearer <JWT>` issued by `aws-challenge-users` for app client `aws-challenge-frontend-spa`, not expired, `token_use=access` | yes (both routes) |
-| `GET /api/me` | request | no body, no query parameters (any are ignored) | — |
-| `GET /api/admin/ping` | request | no body, no query parameters (any are ignored) | — |
-| `Origin` header | string | `https://main.<appId>.amplifyapp.com` or `http://localhost:5173` for CORS | no |
-| Claims used by the handler | from `requestContext.authorizer.jwt.claims` | `sub`, `token_use`, `username`, `exp` (epoch seconds), `cognito:groups` (absent, `[a b]` string or JSON array) | `sub`, `token_use`, `exp` |
-| Handler env vars | string | unchanged from the Week 1 build (probe settings, spec 02) | — |
+| Route | request | `GET /admin`, `POST /chat` as built ([ENVIRONMENT.md](../ENVIRONMENT.md#http-api-week-2)) | — |
+| `Authorization` header | string | `Bearer <JWT>` issued by `aws-challenge-users` for app client `aws-challenge-frontend-spa`, not expired; the SPA uses the access token (ADR-004) | yes |
+| `Origin` header | string | the Amplify origin recorded in ENVIRONMENT.md for CORS | no |
 
-No Week 2 endpoint accepts a request body.
+No request body or query parameter is defined in Week 2.
 
 ## Outputs
 
-`GET /api/me` → 200 `application/json`:
-
-| Field | Type | Source | Notes |
-|---|---|---|---|
-| `id` | string | claim `sub` | Cognito user id |
-| `username` | string \| null | claim `username` | Cognito internal user name (not the e-mail) |
-| `groups` | string[] | claim `cognito:groups` | `[]` when absent |
-| `expiresAt` | string | claim `exp` | ISO-8601 UTC, e.g. `2026-11-12T10:15:00Z` |
-
-`GET /api/admin/ping` → 200 `{"status":"ok"}`.
-
-Errors from the handler: `application/problem+json` with `type`, `title`, `status`, `detail` (CLAUDE.md §6):
-
-| Status | When | `detail` (exact) |
-|---|---|---|
-| 401 | authorizer passed but `token_use ≠ access`, or `sub` / `exp` missing | `Access token required` |
-| 403 | `/api/admin/ping` and `admin` not in groups | `Admin group required` |
-| 404 | an API event with a `routeKey` the handler does not know | `Route not found` |
-| 500 | unexpected error | `Internal error` (no technical detail) |
-
-401 produced by the authorizer (no/invalid/expired token): body `{"message":"Unauthorized"}` (ARCHITECTURE §3.3).
-
-Log lines:
-
-| Source | Fields | Never contains |
-|---|---|---|
-| API access log `/aws/apigateway/aws-challenge-api` | `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` | token, `Authorization` header |
-| `admin` handler, one line per API request | `level`, `message`, `awsRequestId`, `apiRequestId`, `userSub`, `routeKey`, `status`, `durationMs` | token, e-mail, names, any profile value |
+| Case | Response |
+|---|---|
+| Authorizer rejects the request | 401, body `{"message":"Unauthorized"}` (fixed HTTP API body, ARCHITECTURE §3.3); no integration invoked |
+| Authorizer accepts the request | the response of the route's integration; status and body not specified in Week 2 (only "not 401") |
+| CORS preflight from the Amplify origin | 2xx answered by API Gateway with `Access-Control-Allow-Origin` = that origin |
 
 ## Behaviour
 
-1. API Gateway receives the request; for `OPTIONS` preflight it answers from the CORS configuration without the
+1. API Gateway receives the request; an `OPTIONS` preflight is answered from the API's CORS configuration without the
    authorizer.
-2. The JWT authorizer validates signature (JWKS of the pool), `iss`, `exp`/`nbf`, and `aud` (ID token) or `client_id`
-   (access token) against the app client id; on failure → 401 without invoking Lambda.
-3. The `admin` function receives the payload v2 event and reads the claims; `token_use ≠ access` → 401 problem.
-4. `GET /api/me`: builds the response from the claims only; no database or AWS call.
-5. `GET /api/admin/ping`: groups parsed from the claim; contains `admin` → 200, else 403. No database or AWS call.
-6. The handler writes one log line; `apiRequestId` (`requestContext.requestId`) equals the access-log `requestId`.
-7. An event without `requestContext.http` (direct invoke with `{}`, e.g. the console Test tab) runs the existing Week 1 probe
-   unchanged (spec 02).
+2. The JWT authorizer `cognito-jwt-authorizer` reads `$request.header.Authorization` and validates the signature
+   (JWKS of the pool), `iss`, `exp`/`nbf`, and `aud` (ID token) or `client_id` (access token) against the app client
+   id; on failure → 401 without invoking the integration.
+3. On success API Gateway invokes the route's integration (payload format as built); what it does with the request is
+   Week 3.
 
 ## Edge Cases / Failure Modes
 
 | Case | Expected result |
 |---|---|
-| No `Authorization` header / not `Bearer` | 401 from the authorizer, Lambda not invoked |
-| Expired token | 401 from the authorizer |
-| Token signed by another pool or for another app client | 401 from the authorizer |
-| Tampered payload (signature mismatch) | 401 from the authorizer |
-| Valid **ID** token of the right client | passes the authorizer; handler → 401 problem `Access token required` |
-| User added to `admin` but token issued before | 403 until the next sign-in/refresh (documented, not a defect) |
-| `cognito:groups` as `[admin users]` string or JSON array | both parsed; `admin` found |
-| Route not defined (`POST /api/me`, `/api/unknown`) | 404 from API Gateway, Lambda not invoked |
-| Preflight from a non-listed origin | no `Access-Control-Allow-Origin` in the response |
-| Request rate above the stage throttling limits (ARCHITECTURE §3.3) | 429 from API Gateway |
+| No `Authorization` header / not a JWT (`Bearer abc`) | 401 from the authorizer |
+| Expired access token | 401 from the authorizer |
+| Token signed by another pool, or for another app client | 401 from the authorizer |
+| Tampered token (signature mismatch) | 401 from the authorizer |
+| Valid **ID** token of the same app client | passes the authorizer as well (ADR-004); rejecting `token_use ≠ access` is the Week 3 handler's job — known, not a Week 2 defect |
+| Path without a route (e.g. `/unknown`) | 404 from API Gateway |
+| Preflight from a non-listed origin (e.g. `https://example.com`) | no `Access-Control-Allow-Origin` in the response |
+| Preflight from `http://localhost:5173` | not allowed (origin not listed as built); no Week 2 screen calls the API, revisited in Week 3 |
 
 ## Acceptance Criteria
 
-AWS-side criteria are verified from evidence the owner provides (console screenshots, or outputs of the `curl`/AWS
-commands the owner runs); agents have no AWS access (CLAUDE.md §3.11). AC-05.12 is verified locally.
+AWS-side criteria are verified from evidence the owner provides (console screenshots; status codes from the browser
+console or Network tab of the deployed SPA, or from `curl`); agents have no AWS access (CLAUDE.md §3.11). Token
+values never appear in the evidence.
 
-- [ ] AC-05.1 The API `aws-challenge-api` exists with protocol HTTP and one JWT authorizer with the pool issuer URL
-  and audience = app client id
-- [ ] AC-05.2 The routes are exactly `GET /api/me` and `GET /api/admin/ping`, each with `AuthorizationType=JWT`;
-  no `ANY` or `$default` route
-- [ ] AC-05.3 `curl` to both routes without a token, with a malformed token and with an expired token → 401
-- [ ] AC-05.4 `GET /api/me` with a valid access token → 200; `id` equals the token's `sub`, `groups` equals its
-  `cognito:groups` (or `[]`), `expiresAt` equals its `exp` in ISO-8601 UTC
-- [ ] AC-05.5 `GET /api/me` with a valid **ID** token → 401 `application/problem+json`, `detail` = `Access token required`
-- [ ] AC-05.6 `GET /api/admin/ping` with a non-admin access token → 403 `application/problem+json`; with an admin
-  access token → 200 `{"status":"ok"}`
-- [ ] AC-05.7 Preflight `OPTIONS /api/me` with `Origin` = the Amplify domain → `Access-Control-Allow-Origin` equals
-  that origin; with `Origin: https://example.com` → header absent
-- [ ] AC-05.8 The access log group exists with retention 14 days and contains a JSON line for each call of AC-05.3/05.4
-  with `status` and `requestId`; the `admin` log line for the AC-05.4 call has the same `apiRequestId` and a `userSub`
-- [ ] AC-05.9 A search of both log groups for the string `eyJ` (JWT prefix) and for the test user's e-mail finds nothing
-- [ ] AC-05.10 A direct invoke of `aws-challenge-admin` with `{}` returns the same probe result as before the deploy
-  (recorded in T02-03 Notes)
-- [ ] AC-05.11 The Lambda resource policy of `aws-challenge-admin` allows `apigateway.amazonaws.com` only with a
-  `SourceArn` of `aws-challenge-api`; the role of `aws-challenge-admin` has no permission added in Week 2
-- [ ] AC-05.12 pytest unit tests of the handler cover: `token_use` check, missing claims, group parsing (absent,
-  string form, JSON array), 200/401/403/404 mapping, the problem+json body and the `{}` probe dispatch
+- [ ] AC-05.1 The API `aws-challenge-api` exists with protocol HTTP, stage `$default` and the JWT authorizer
+  `cognito-jwt-authorizer` with identity source `$request.header.Authorization`, issuer = the pool issuer URL and
+  audience = the app client id (values in ENVIRONMENT.md)
+- [ ] AC-05.2 The routes are `GET /admin` and `POST /chat` (no `ANY` route: it would capture the CORS preflight), each with authorization type JWT and this authorizer; there
+  is no route without the authorizer and no `$default` route
+- [ ] AC-05.3 A request to `/admin` and to `/chat` without an `Authorization` header → 401
+- [ ] AC-05.4 A request to `/admin` with each of: `Authorization: Bearer abc`, a valid access token with one character
+  of its signature changed, an access token older than 60 minutes (expired) → 401
+- [ ] AC-05.5 A request to `/admin` and to `/chat` with a valid access token of a signed-in user of the deployed SPA
+  → status not 401 (the request passed the authorizer; the status returned by each integration is recorded)
+- [ ] AC-05.6 A CORS preflight (`OPTIONS`, `Origin` = the Amplify origin, `Access-Control-Request-Method: GET`,
+  `Access-Control-Request-Headers: authorization`) to `/admin` → 2xx with `Access-Control-Allow-Origin` equal to that
+  origin

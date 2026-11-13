@@ -129,15 +129,19 @@ Function names `aws-challenge-<function>` (§4).
 
 | Function | Trigger | Responsibility | From |
 |---|---|---|---|
-| `admin` | HTTP API | `/api/me`, `/api/admin/*`; Week 1 `SELECT 1` probe on a direct invoke | Week 1 (probe), Week 2 (API) |
+| `admin` | HTTP API | `/api/me`, `/api/admin/*`; Week 1 `SELECT 1` probe on a direct invoke | Week 1 (probe), Week 3 (API) |
 | `chatbot` | HTTP API | `/api/chat/*`: similarity search, Bedrock Agent | Week 5 |
 | `sync` | Cognito → EventBridge chain | copy of the user into PostgreSQL, embedding on insert/update | Week 3, Week 4 |
 
-Source layout (one directory per function under `lambdas/`) and packaging are fixed by T02-02 and its skill file.
-The Week 1 code of `chatbot` and `sync` exists only in the AWS console until their weeks bring it into Git
+Source layout (one directory per function under `lambdas/`) and packaging are fixed by the Week 3 task that brings
+`admin` into Git, with its skill file. The Week 1 code of all three functions exists only in the AWS console until
+their weeks bring it into Git
 ([R-15](RISKS.md#2-risk-register)).
 
 ### 3.3 API Gateway (HTTP API)
+Week 2 as built (design [api-gateway-auth](design/api-gateway-auth.md), values in [ENVIRONMENT.md](ENVIRONMENT.md)):
+JWT authorizer on `GET /admin` and `POST /chat`, CORS for the Amplify origin only, no access log, no endpoint contract.
+The bullets below are the target; Week 3 decides how the built API reaches it.
 - JWT authorizer: issuer `https://cognito-idp.<region>.amazonaws.com/<userPoolId>`, audience `<appClientId>`
   (for access tokens API Gateway matches `client_id`, because they carry no `aud`).
 - Only explicit `METHOD /path` routes, no `ANY` / `$default` route, so CORS preflight is answered by API Gateway
@@ -151,11 +155,12 @@ The Week 1 code of `chatbot` and `sync` exists only in the AWS console until the
 - Stage throttling: 50 rps / burst 100 (learning workload). Integration timeout 29 s (Week 5).
 
 ### 3.4 Cognito User Pool
-- E-mail as the sign-in (username) attribute, e-mail verification by code, default password policy. Registration
+- E-mail as the sign-in (username) attribute, new accounts confirmed by the owner in the console (no code in the
+  SPA, 2026-11-13), default password policy. Registration
   attributes and their validation: [spec 04](specs/04-user-registration-and-sign-in.md) ([Q-14](RISKS.md#q-14)
   option C: validation only in the SPA, custom attributes without min/max); they are immutable once the pool exists.
 - Public app client (no secret), SRP flow. Tokens: access/ID 60 min, refresh 5 days (as built, T02-01).
-- Group `admin`, members added manually by the owner in the Cognito console.
+- Group `admin` (Week 3), members added manually by the owner in the Cognito console.
 - Week 2 uses Cognito as the only profile store (ADR-013); the copy in PostgreSQL arrives with the Week 3 sync chain.
 
 ### 3.5 Data: RDS PostgreSQL + RDS Proxy
@@ -189,7 +194,8 @@ environment (by the owner), if ever needed.
 ## 5. Key flows
 
 ### 5.1 Sign-up (Week 2)
-SPA → Cognito `SignUp` (e-mail, password, profile attributes) → e-mail with code → `ConfirmSignUp` → `SignIn` (SRP).
+SPA → Cognito `SignUp` (e-mail, password, profile attributes) → the owner confirms the account in the Cognito
+console → `SignIn` (SRP).
 No trigger in Week 2; Week 3 adds the sync chain to PostgreSQL.
 
 ### 5.2 Authenticated request
@@ -208,8 +214,9 @@ query containing "sql" into SQL. Designed when Weeks 4 and 5 are planned.
 
 | Method | Path | Auth | Body / parameters | Response | Week |
 |---|---|---|---|---|---|
-| GET | `/api/me` | JWT | — | caller's token claims — [spec 05](specs/05-protected-api.md) | 2 |
-| GET | `/api/admin/ping` | JWT + `admin` | — | admin probe — [spec 05](specs/05-protected-api.md) | 2 |
+| ANY | `/admin`, `/chat` | JWT | — | no contract; proves the authorizer only — [spec 05](specs/05-protected-api.md) | 2 (as built) |
+| GET | `/api/me` | JWT | — | caller's token claims | 3 (to be specified; moved from Week 2) |
+| GET | `/api/admin/ping` | JWT + `admin` | — | admin probe | 3 (to be specified; moved from Week 2) |
 | GET | `/api/admin/users` | JWT + `admin` | `page`, `size(1..100)` | `{items[], page, size, total}` | 3 (to be specified) |
 | POST | `/api/chat/search` | JWT | to be specified | to be specified | 5 |
 
@@ -313,7 +320,8 @@ Until Week 6 handlers print one JSON line per invocation with the standard libra
 (standard + custom attributes); the personal page reads it in the SPA with `fetchUserAttributes`; `GET /api/me`
 returns the caller's token claims and proves the protected API, not the profile. Week 3 copies users into
 PostgreSQL through the EventBridge sync chain (curriculum); whether the personal page then switches to the database
-copy is decided in Week 3. *Alternatives considered:* `app_user` read model behind `GET /api/me` already in Week 2
+copy is decided in Week 3. *Amended 2026-11-13 (owner):* `GET /api/me` moved to Week 3; in Week 2 the SPA calls no
+API. *Alternatives considered:* `app_user` read model behind `GET /api/me` already in Week 2
 (moved to Week 3 by the curriculum); PostgreSQL only with Cognito for credentials (duplicates Cognito sign-up).
 *Consequence:* the user can change own attributes through `UpdateUserAttributes` ([R-12](RISKS.md#2-risk-register)).
 
@@ -342,9 +350,9 @@ tests and migrations are decided with the first schema ([Q-16](RISKS.md#q-16)).
 |---|---|---|---|
 | G1 | Amplify Hosting, `amplify.yml` | Week 1 — [spec 01](specs/01-spa-delivery.md) | push to `main` → new SPA version live without manual steps |
 | G2 | CloudFront (Amplify), VPC | Week 1 — [spec 01](specs/01-spa-delivery.md), [spec 02](specs/02-database-connectivity.md) | SPA served by CloudFront (`x-cache`, `via`); backend has no public IPs |
-| G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL | sign-up → e-mail code → sign-in → tokens in SPA → personal page |
-| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md) | no token → 401, access token → 200, non-admin on `/api/admin` → 403 |
+| G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL | sign-up → owner confirms → sign-in → tokens in SPA → personal page |
+| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — endpoints, `admin` group | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: access token → 200, non-admin on `/api/admin` → 403 |
 | G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md); Week 3 — Admin Lambda data | Lambda connects only to the proxy endpoint |
 | G6 | pgvector, HNSW / IVFFlat | Week 4 | similarity query uses the index; latency on 1000 records recorded |
 | G7 | Bedrock embeddings | Week 4 ([Q-15](RISKS.md#q-15)) | embedding computed by the Sync Lambda on insert/update |
-| G8 | CloudWatch, JSON logs, X-Ray | Week 1 (log groups); Week 2 (API access log, [spec 05](specs/05-protected-api.md)); Week 6 | one request traced by `apiRequestId` through API GW → Lambda → DB/Bedrock |
+| G8 | CloudWatch, JSON logs, X-Ray | Week 1 (log groups); Week 3 (API access log, handler log lines — moved from Week 2); Week 6 | one request traced by `apiRequestId` through API GW → Lambda → DB/Bedrock |

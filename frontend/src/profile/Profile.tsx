@@ -1,34 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchUserAttributes } from 'aws-amplify/auth'
-import { useEffect } from 'react'
-import { ApiError, endpoints, meQueryKey } from '../api/client'
-import { useSignOut } from '../auth/session'
-import { env } from '../config/amplify'
-import { formatBirthdate, formatCountry, formatMeasure, formatText, roleLine } from './format'
+import { formatBirthdate, formatCountry, formatMeasure, formatText } from './format'
 
 export const userAttributesQueryKey = ['user-attributes'] as const
-
-function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401
-}
-
-/** Role line from GET /api/me; "Role: unavailable" on 5xx/network errors (spec 04). Mounted only with VITE_API_URL. */
-function RoleLineView() {
-  const signOutAndRedirect = useSignOut()
-  const me = useQuery({
-    queryKey: meQueryKey,
-    queryFn: endpoints.me,
-    retry: (failureCount, error) => !isUnauthorized(error) && failureCount < 1,
-  })
-
-  useEffect(() => {
-    // 401: token expired and refresh failed → clear the session and go to /sign-in
-    if (isUnauthorized(me.error)) void signOutAndRedirect()
-  }, [me.error, signOutAndRedirect])
-
-  if (me.isPending) return <p className="badge">Role: …</p>
-  return <p className="badge">{roleLine(me.isSuccess ? me.data.groups : undefined)}</p>
-}
 
 /** Read-only profile of the signed-in user from Cognito attributes, shown on Home `/` (ADR-013, spec 04 §Outputs). */
 export function Profile() {
@@ -78,8 +52,6 @@ export function Profile() {
           </div>
         ))}
       </dl>
-      {/* Without VITE_API_URL the role line is not rendered and no request is made (owner decision 2026-11-13) */}
-      {env.apiUrl && <RoleLineView />}
     </section>
   )
 }

@@ -1,112 +1,98 @@
 # Design — Protected API (HTTP API + Cognito JWT authorizer)
 
-Status: **Accepted** (2026-11-12, owner), with ADR-004.
-Requirements: [week-02](../requirements/week-02-authorization.md) W2-G3, W2-G4, S4, S5, S7 ·
+Status: **Accepted** (2026-11-12, owner), with ADR-004. Amended 2026-11-13 by owner decision: Week 2 = the curriculum
+topic only; the API is the one the owner built in the console; the `admin` handler, `/api/me`, `/api/admin/ping` and
+the group check moved to Week 3 (see "Moved to Week 3" below).
+Requirements: [week-02](../requirements/week-02-authorization.md) W2-G3, S4 ·
 Spec: [05-protected-api](../specs/05-protected-api.md)
-Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.2, §3.3, §5.2, §6, §8, §9, ADR-003, ADR-004, ADR-015,
-goals G4, G8
+Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.3, §5.2, §6, ADR-003, ADR-004, goal G4
 Related design: [authentication](authentication.md) (User Pool, SPA)
 
 ## Problem Statement
 
-Signed-in users must reach the Lambda functions in the VPC only with a valid Cognito token; requests without one must
-be rejected before any Lambda runs. One route must be restricted to the `admin` group. Today there is no API: the
-Week 1 `admin` function is a `SELECT 1` probe written in the AWS console, and its code is not in Git
-([R-15](../RISKS.md#2-risk-register)). Database access through the API is Week 3 (curriculum).
+Requests to the functions in the VPC must be accepted only with a valid Cognito token of the project's User Pool and
+app client; requests without one must be rejected by API Gateway before any function runs (curriculum Week 2: "HTTP
+API Gateway with JWT authorizer"). What the functions return, database access and role checks belong to Week 3
+("REST API + data: Admin Lambda ↔ RDS Proxy").
 
 ## Proposed Solution
 
 ```mermaid
 flowchart LR
-    SPA[SPA] -->|"GET /api/me, /api/admin/ping<br/>Bearer access token"| API[HTTP API aws-challenge-api<br/>JWT authorizer]
-    API -->|payload v2| ADM[Lambda aws-challenge-admin<br/>Python 3.13]
-    API -.->|JSON access log| CW[CloudWatch Logs]
-    ADM -.-> CW
-    CLI["direct invoke {} (console Test)"] -->|Week 1 probe| ADM
+    SPA["Browser (signed in to the SPA)"] -->|"Bearer access token"| API[HTTP API aws-challenge-api<br/>JWT authorizer cognito-jwt-authorizer]
+    API -->|GET /admin| IA[integration of /admin]
+    API -->|POST /chat| IC[integration of /chat]
+    X[request without a valid token] -->|401, no integration call| API
 ```
 
-All AWS changes are made by the owner in the console from a devops runbook in the task (Q-12 C, CLAUDE.md §3.11).
-Code per ADR-015.
+Built by the owner in the console on 2026-11-13 (CLAUDE.md §3.11). Identifiers and exact values live only in
+[ENVIRONMENT.md](../ENVIRONMENT.md#http-api-week-2); this table states the design intent.
 
-**HTTP API** `aws-challenge-api` (ADR-003):
-
-| Setting | Value |
+| Setting | Week 2 (as built) |
 |---|---|
-| Stage | `$default`, auto-deploy, throttling as in ARCHITECTURE §3.3 |
-| Authorizer | JWT, identity source `$request.header.Authorization`, issuer `https://cognito-idp.<region>.amazonaws.com/<userPoolId>`, audience `[<appClientId>]` |
-| Routes | `GET /api/me` → `admin`; `GET /api/admin/ping` → `admin`; both with the JWT authorizer, no scopes. No `ANY`/`$default` route |
-| Integration | Lambda proxy, payload format 2.0, unqualified function, timeout 29 s (ARCHITECTURE §3.3) |
-| CORS | origins `https://main.<appId>.amplifyapp.com`, `http://localhost:5173`; methods `GET`; headers `authorization`, `content-type`; max age 600 s; no credentials |
-| Access log | log group `/aws/apigateway/aws-challenge-api`, retention 14 days, one JSON line: `requestId`, `routeKey`, `status`, `responseLatency`, `integrationError`, `authorizerError`, `sub` (`$context.authorizer.claims.sub`) |
-| Invoke permission | `lambda:InvokeFunction` for `apigateway.amazonaws.com`, `SourceArn` = this API's ARN (no wildcard account/API) |
+| API | HTTP API (ADR-003), stage `$default` |
+| Authorizer | JWT; identity source `Authorization` header; issuer = the User Pool; audience = the SPA app client id (matched against `aud` of ID tokens and `client_id` of access tokens, ADR-004) |
+| Routes | `GET /admin`, `POST /chat` (no `ANY`: it captures the CORS preflight), both with the JWT authorizer, no scopes; no route without the authorizer, no `$default` route |
+| CORS | the Amplify origin only; headers `authorization`, `content-type`; no credentials |
+| Integrations | whatever the owner attached; not specified in Week 2 (the request only has to pass the authorizer, spec 05) |
 
-**`admin` function — Python handler (ADR-015).** The current console code is exported by the owner (console:
-Actions → Export function → Download deployment package) and copied into the repository under `lambdas/admin/` first, so the probe is preserved and the code is
-in Git from now on. The handler dispatches on the event shape:
+The SPA makes no API call in Week 2 (spec 04); `VITE_API_URL` is set in Amplify Hosting for Week 3. The proof that a
+valid token passes is a call from the browser console of the deployed, signed-in SPA (spec 05 AC-05.5).
 
-- event with `requestContext.http` → API request, dispatched on `routeKey`;
-- otherwise → the existing Week 1 probe, unchanged (spec 02);
-- claims are read only from `requestContext.authorizer.jwt.claims` (never from headers);
-- `token_use ≠ access` → 401 problem+json (ADR-004: both token types pass the authorizer);
-- `GET /api/me` → 200 with `id`, `username`, `groups`, `expiresAt` from the claims; no database or AWS call;
-- `GET /api/admin/ping` → `admin` in `cognito:groups` → 200, else 403 problem+json. HTTP API passes the array claim
-  as a string such as `[admin users]`; the handler parses both that form and a JSON array;
-- one JSON log line per API request (standard library, ADR-012) with `awsRequestId`, `apiRequestId`
-  (`requestContext.requestId`), `userSub`, `routeKey`, `status`, `durationMs`; no token, e-mail or profile values;
-- no new third-party dependency; function settings (memory, timeout, VPC, role, env vars) unchanged.
-
-**Configuration of the SPA:** `VITE_API_URL` = the API's invoke URL, set in Amplify Hosting and in the developer's
-`.env.local`. Local development calls the dev API directly (CORS allows `http://localhost:5173`); the Vite `/api`
-proxy to `:8080` belonged to the deleted Spring backend and is removed by T02-05.
+**Moved to Week 3** (designed again when Week 3 is planned; this list is input, not a design): `lambdas/admin/` in Git
+(R-15); routes for real endpoints (`GET /api/me`, admin routes) with the handler's `token_use` check, `admin` group
+check (403) and problem+json errors; first administrator in the group `admin`; role line in the SPA; API access log
+and handler log lines (S7); Lambda invoke permission scoped by `SourceArn`; stage throttling.
 
 ## Alternatives Considered
 
 | Topic | Option | Pros | Cons | Verdict |
 |---|---|---|---|---|
-| API type | HTTP API + JWT authorizer (ADR-003) | native Cognito JWT validation, cheaper, curriculum wording (G4, Week 2) | no gateway responses (401 body fixed), no request validation | **accepted (ADR-003)** |
-| API type | REST API + Cognito authorizer (Week 3 wording, owner's diagram) | gateway responses, usage plans, WAF | ~3.5× price, more config | rejected |
-| Admin check | `cognito:groups` checked in the handler | no OAuth scopes needed; works with SRP tokens | authorisation in code — must be unit-tested | **proposed** |
-| Admin check | Route scopes (resource server + custom scope) | enforced by API Gateway | custom scopes only in tokens from the OAuth flow (hosted UI), not from SRP sign-in; per-user scopes need a PreTokenGeneration trigger (Essentials plan) | rejected for Week 2 |
-| Admin check | Lambda authorizer reading groups | enforced at the edge | one more function and cold start per request | rejected |
-| Function for the API | Extend the Week 1 `admin` function (probe kept for direct invokes) | curriculum names Admin Lambda as the API target (Week 3); no new function | two entry shapes in one handler | **proposed** |
-| Function for the API | New function `aws-challenge-api` | single responsibility | a fourth function the curriculum does not have | rejected |
-| `/api/me` content | Token claims only | no database (Week 3), proves the authorizer and claims path | not the profile | **proposed** (owner decision D5) |
-| Local dev | Direct calls to the dev API with CORS for localhost | no local backend exists (ADR-015) | needs the deployed API | **proposed** |
-| Local dev | Vite proxy `/api` → dev API URL | no CORS locally | hides CORS problems until deployment | alternative |
+| API type | HTTP API + JWT authorizer (ADR-003) | native Cognito JWT validation, cheaper, curriculum wording | no gateway responses (401 body fixed), no request validation | **accepted (ADR-003)** |
+| API type | REST API + Cognito authorizer | gateway responses, usage plans, WAF | ~3.5× price, more config | rejected |
+| Week 2 scope | A: authorizer at the edge only, routes as built by the owner (`GET /admin`, `POST /chat`; `ANY` replaced 2026-11-13) | matches the curriculum topic; already built; no code | no endpoint contract yet; no `/api` prefix differ from CLAUDE.md §6 | **accepted** (owner, 2026-11-13) |
+| Week 2 scope | B: A + `admin` handler with `GET /api/me`, `GET /api/admin/ping`, group check | proves claims and the role in code | Lambda code, packaging and tests before the Week 3 data work; beyond the topic | moved to Week 3 |
+| Week 2 scope | C: B + role line in the SPA | visible end-to-end proof | depends on B | moved to Week 3 |
+| Proof of a valid token | Browser console `fetch` from the signed-in deployed SPA (status only) | no new code; real token from a real sign-in | manual, evidence is a screenshot | **accepted** |
+| Proof of a valid token | `curl` with a token copied out of the browser | scriptable | token handled outside the browser (leak risk in shell history) | alternative |
 
 ## API Design
 
-| Method | Path | Auth | Request | Success | Errors |
-|---|---|---|---|---|---|
-| GET | `/api/me` | JWT (access token) | no body, no query parameters | 200 `{id, username, groups, expiresAt}` (spec 05 §Outputs) | 401, 500 |
-| GET | `/api/admin/ping` | JWT + group `admin` | no body, no query parameters | 200 `{"status":"ok"}` | 401, 403, 500 |
-
-Errors from the handler are RFC 9457 `application/problem+json` (CLAUDE.md §6). 401 produced by the authorizer itself
-has the body `{"message":"Unauthorized"}` (ARCHITECTURE §3.3). No Week 2 endpoint creates or updates data.
+Week 2 defines no endpoint contract. The routes `GET /admin` and `POST /chat` exist only to prove the authorizer:
+without a valid token → 401 `{"message":"Unauthorized"}` (fixed HTTP API body, ARCHITECTURE §3.3); with a valid access
+token → whatever the integration returns. The `/api` prefix, explicit `METHOD /path` routes, request/response fields
+and problem+json errors (CLAUDE.md §6) apply to the endpoints Week 3 defines. No Week 2 route creates or updates data.
 
 ## Affected Components
 
-New: HTTP API `aws-challenge-api` with authorizer, routes, stage, access log group (T02-03); `lambdas/admin/` in the
-repository with the handler and pytest tests (T02-02); skill files `python-lambda` (T02-02) and `http-api-jwt`
-(T02-03). Changed: code of `aws-challenge-admin` (settings unchanged); Amplify env var `VITE_API_URL`.
+New (built by the owner, T02-03): HTTP API `aws-challenge-api` with the authorizer, two routes, stage and CORS;
+Amplify Hosting env var `VITE_API_URL` (unused by Week 2 code). Skill file `http-api-jwt` (T02-03, skills ownership
+rule). No Lambda code changes in Week 2.
 
 ## Security Considerations
 
-- Authentication at the edge: every Week 2 route has the JWT authorizer; signature, `iss`, `exp`, `aud`/`client_id`
-  are checked by API Gateway; `token_use` and the group in the handler.
-- Claims are trusted only from `requestContext.authorizer.jwt.claims`.
-- Least privilege: the `admin` role gets no new permission; the invoke permission is scoped by `SourceArn`.
-- The function stays in private subnets; the API is the only public entry point; CORS only for the two origins.
-- Logs carry only `sub` (CLAUDE.md §7); `/api/me` returns no personal data beyond the Cognito ids and groups.
-- Downloading the console code may pull in a hard-coded value: the backend task checks the code for secrets before
-  it is committed (CLAUDE.md §7).
+- Authentication at the edge: both routes have the JWT authorizer; signature, `iss`, `exp`, `aud`/`client_id` are
+  checked by API Gateway. Neither route is reachable without a token.
+- Both token types of the app client pass the authorizer (ADR-004); Week 2 has no handler that rejects ID tokens.
+  Acceptable while the integrations return no user data; the Week 3 handler must check `token_use = access`.
+- `ANY` routes forward every method to the integration once authorized; the Week 3 handler must reject methods it
+  does not serve (or Week 3 replaces them with explicit routes).
+- No group-based authorisation exists in Week 2; any confirmed user of the pool passes. Since the owner confirms every
+  account manually, the set of users who can reach the integrations is controlled by the owner.
+- CORS allows only the Amplify origin; CORS is not an access control (non-browser clients ignore it) — the authorizer
+  is.
+- No API access log in Week 2: rejected requests are not traceable (S7 moved to Week 3).
+- Evidence never contains token values (the console snippet prints only status codes).
 
 ## Cost
 
-No always-on resources. HTTP API: per-request pricing (about $1 per million requests; learning volume ≈ $0).
-Lambda and CloudWatch Logs: within the existing usage. The Week 1 always-on cost (RDS, Proxy, NAT if any — R-09) is unchanged. No outbound
-AWS call from the function is added, so the missing-NAT question (R-09) does not affect this design.
+No always-on resources. HTTP API: per-request pricing (about $1 per million requests in eu-west-1; learning volume
+≈ $0). Unchanged Week 1 always-on cost (RDS, Proxy, NAT if any — R-09).
 
 ## Open Questions
 
-None. ADR-004 (access token to the API) Accepted by the owner 2026-11-12.
+None blocking. Open points for Week 3 planning (not blockers, not `Q-xx`):
+- `/api` prefix and (CLAUDE.md §6) vs the built `GET /admin`, `POST /chat`.
+- Which integration `/admin` has (ENVIRONMENT.md records one only for `/chat`).
+- CORS for `http://localhost:5173` (local development against the dev API) and a non-zero preflight max age.
+- API access log, throttling, invoke permission by `SourceArn` (from the original Week 2 design).

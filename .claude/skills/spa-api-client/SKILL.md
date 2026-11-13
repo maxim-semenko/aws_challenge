@@ -32,7 +32,7 @@ Conventions: CLAUDE.md §6. Endpoint fields: [spec 05](../../../docs/specs/05-pr
 
 | Endpoint | Type | Query key | Used by |
 |---|---|---|---|
-| `GET /api/me` | `MeResponse` `{ id, username, groups, expiresAt }` (spec 05) | `meQueryKey` = `['me']` | role line of the profile on Home (`profile/Profile.tsx`) |
+| `GET /api/me` | `MeResponse` `{ id, username, groups, expiresAt }` (spec 05) | `meQueryKey` = `['me']` | not used in Week 2 (role line moved to Week 3); kept for the Week 3 admin features |
 | `fetchUserAttributes` (Cognito, not the API) | Amplify output | `['user-attributes']` | profile on Home |
 | session (`getCurrentUser`) | `Session \| null` | `['auth','session']` | Home, guards, header |
 

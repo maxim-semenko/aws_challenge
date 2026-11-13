@@ -65,7 +65,7 @@ planned** (now: Week 2 — authorization).
 | AWS changes | made by the owner in the AWS console from a devops console runbook in the task (§3.11, Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (console runbooks); IaC pending Q-02 |
 | Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
 | Tests | `pytest` (Lambdas); frontend test runner introduced by the first task that needs one; Playwright for E2E (planned) | — |
-| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from T02-02), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
+| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from the Week 3 Admin Lambda task), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
 
 Exact library versions live in each `lambdas/<function>/requirements.txt` and in `frontend/package.json`, nowhere
 else.
@@ -105,7 +105,7 @@ ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) a
   pinned `requirements.txt` (pure-Python packages, so a zip built on Windows runs on Lambda); handler entry point
   `lambda_handler(event, context)`; clients and config at module level, no network call or DB connection at init;
   parameterised SQL only; pytest with AWS and database access replaced by test doubles. Layout details and commands:
-  the `python-lambda` skill (created by T02-02).
+  the `python-lambda` skill (created by the Week 3 Admin Lambda task).
 - **Secrets:** only in AWS Secrets Manager; never in code, config files, env var values, logs or Git.
 - **Database:** schema only via versioned SQL migrations `V<n>__<description>.sql` (tool per Q-16); no schema
   changes by hand.
@@ -184,7 +184,7 @@ skills use `source: project` and name the task that created them.
 docker compose up -d                       # local PostgreSQL + pgvector on :5432 (major 17, see R-14)
 cd frontend && npm ci && npm run dev       # http://localhost:5173 (calls the dev API from VITE_API_URL)
 npm run build
-# Lambda commands (pytest, zip) are added by T02-02 with the python-lambda skill
+# Lambda commands (pytest, zip) are added by the Week 3 Admin Lambda task with the python-lambda skill
 ```
 
 ## 10. Repository facts
@@ -193,6 +193,6 @@ npm run build
 - Week 1 AWS infrastructure (Amplify Hosting, VPC, RDS PostgreSQL 14, RDS Proxy, three Python Lambdas, log groups)
   was built manually in the console by the owner and accepted 2026-11-12; known facts in ARCHITECTURE §4. No IaC
   yet (T00-03).
-- The Lambda code exists only in AWS until it is brought into `lambdas/` (`admin`: T02-02; R-15).
+- The Lambda code exists only in AWS until it is brought into `lambdas/` (`admin`: Week 3; R-15).
 - The Spring Boot `backend/` draft was deleted (2026-11-12); `settings.gradle` includes only `frontend`.
 - `frontend/src` contains draft code written before the plan; handled by T00-04, T02-04, T02-05.
