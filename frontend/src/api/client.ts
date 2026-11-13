@@ -47,34 +47,7 @@ export interface MeResponse {
 
 export const meQueryKey = ['me'] as const
 
-export interface DocumentSearchResult {
-  id: number
-  title: string
-  content: string
-  distance: number
-}
-
-export interface UserDto {
-  id: number
-  email: string
-  username: string | null
-  createdAt: string
-}
-
-export interface PageResponse<T> {
-  items: T[]
-  page: number
-  size: number
-  total: number
-}
-
+/** Week 2 endpoints used by the SPA (spec 05); later endpoints are added with their specs. */
 export const endpoints = {
-  health: () => api<{ status: string }>('/api/health'),
   me: () => api<MeResponse>('/api/me'),
-  search: (query: string, limit = 5) =>
-    api<DocumentSearchResult[]>('/api/chat/search', {
-      method: 'POST',
-      body: JSON.stringify({ query, limit }),
-    }),
-  users: (page = 0, size = 20) => api<PageResponse<UserDto>>(`/api/admin/users?page=${page}&size=${size}`),
 }

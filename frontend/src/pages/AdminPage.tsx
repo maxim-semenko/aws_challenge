@@ -1,67 +1,9 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { endpoints } from '../api/client'
-import { env } from '../config/amplify'
+import { ComingLater } from './ComingLater'
 
-const PAGE_SIZE = 20
-
-/** Draft from before the plan; without VITE_API_URL no request is made (owner decision 2026-11-13). */
+/**
+ * /admin: the users list is Week 3 (curriculum); the Week 2 API has only GET /api/me and GET /api/admin/ping
+ * (spec 05). No request in Week 2, regardless of VITE_API_URL (owner request 2026-11-13).
+ */
 export function AdminPage() {
-  if (!env.apiUrl) {
-    return (
-      <section>
-        <h1>Users</h1>
-        <p>Not available yet.</p>
-      </section>
-    )
-  }
-  return <UsersTable />
-}
-
-function UsersTable() {
-  const [page, setPage] = useState(0)
-  const users = useQuery({
-    queryKey: ['admin-users', page],
-    queryFn: () => endpoints.users(page, PAGE_SIZE),
-    placeholderData: keepPreviousData,
-  })
-  const totalPages = users.data ? Math.max(1, Math.ceil(users.data.total / PAGE_SIZE)) : 1
-
-  return (
-    <section>
-      <h1>Users</h1>
-      {users.isError && <p className="error">{users.error.message}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Email</th>
-            <th>Username</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.data?.items.map((u) => (
-            <tr key={u.id}>
-              <td>{u.id}</td>
-              <td>{u.email}</td>
-              <td>{u.username ?? '—'}</td>
-              <td>{new Date(u.createdAt).toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="row">
-        <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-          Prev
-        </button>
-        <span>
-          {page + 1} / {totalPages}
-        </span>
-        <button disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
-          Next
-        </button>
-      </div>
-    </section>
-  )
+  return <ComingLater title="Users" />
 }

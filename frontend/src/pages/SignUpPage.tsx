@@ -1,29 +1,43 @@
 import { useMutation } from '@tanstack/react-query'
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { countryOptions } from '../auth/countries'
 import { MESSAGES, signUpErrorMessage } from '../auth/errors'
 import { submitSignUp, type SignUpOutcome } from '../auth/signUpFlow'
 import { EMPTY_SIGN_UP_FORM, type FieldErrors, type SignUpField, type SignUpForm } from '../auth/validation'
 
+type ChangeHandler = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void
+
 interface FieldProps {
   name: SignUpField
   label: string
   form: SignUpForm
   errors: FieldErrors
-  onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void
+  onChange: ChangeHandler
   type?: string
   autoComplete?: string
   inputMode?: 'numeric' | 'email' | 'text'
   placeholder?: string
 }
 
-function TextField({ name, label, form, errors, onChange, type = 'text', autoComplete, inputMode, placeholder }: FieldProps) {
-  const errorId = `${name}-error`
+/** Label above the control, field error under it (linked by aria-describedby). */
+function FieldShell({ name, label, error, children }: { name: SignUpField; label: string; error?: string; children: ReactNode }) {
   return (
-    <p>
+    <div className="field">
       <label htmlFor={name}>{label}</label>
-      <br />
+      {children}
+      {error && (
+        <small id={`${name}-error`} className="field-error">
+          {error}
+        </small>
+      )}
+    </div>
+  )
+}
+
+function TextField({ name, label, form, errors, onChange, type = 'text', autoComplete, inputMode, placeholder }: FieldProps) {
+  return (
+    <FieldShell name={name} label={label} error={errors[name]}>
       <input
         id={name}
         name={name}
@@ -34,17 +48,9 @@ function TextField({ name, label, form, errors, onChange, type = 'text', autoCom
         inputMode={inputMode}
         placeholder={placeholder}
         aria-invalid={Boolean(errors[name])}
-        aria-describedby={errors[name] ? errorId : undefined}
+        aria-describedby={errors[name] ? `${name}-error` : undefined}
       />
-      {errors[name] && (
-        <>
-          <br />
-          <small id={errorId} className="error">
-            {errors[name]}
-          </small>
-        </>
-      )}
-    </p>
+    </FieldShell>
   )
 }
 
@@ -53,12 +59,12 @@ type Created = Exclude<SignUpOutcome, { kind: 'invalid' }>
 /** Shown after a successful SignUp; the owner activates new users in the Cognito console (decision 2026-11-13). */
 function AccountCreated({ outcome }: { outcome: Created }) {
   return (
-    <section>
+    <section className="card">
       <h1>Sign up</h1>
-      <p role="status">
+      <p role="status" className="message message-info">
         {outcome.kind === 'pendingActivation' ? MESSAGES.accountCreatedPending : MESSAGES.accountCreatedDone}
       </p>
-      <p>
+      <p className="card-footer">
         <Link to="/sign-in" state={{ email: outcome.email }}>
           Go to sign in
         </Link>
@@ -102,11 +108,13 @@ export function SignUpPage() {
   const field = { form, errors, onChange }
 
   return (
-    <section>
+    <section className="card card-wide">
       <h1>Sign up</h1>
-      <form onSubmit={onSubmit} noValidate>
-        <TextField name="givenName" label="First name" autoComplete="given-name" {...field} />
-        <TextField name="familyName" label="Last name" autoComplete="family-name" {...field} />
+      <form className="form" onSubmit={onSubmit} noValidate>
+        <div className="form-grid">
+          <TextField name="givenName" label="First name" autoComplete="given-name" {...field} />
+          <TextField name="familyName" label="Last name" autoComplete="family-name" {...field} />
+        </div>
         <TextField name="email" label="Email" type="email" inputMode="email" autoComplete="email" {...field} />
         <TextField name="password" label="Password" type="password" autoComplete="new-password" {...field} />
         <TextField
@@ -116,9 +124,7 @@ export function SignUpPage() {
           autoComplete="new-password"
           {...field}
         />
-        <p>
-          <label htmlFor="gender">Gender</label>
-          <br />
+        <FieldShell name="gender" label="Gender" error={errors.gender}>
           <select
             id="gender"
             name="gender"
@@ -131,15 +137,7 @@ export function SignUpPage() {
             <option value="F">F</option>
             <option value="M">M</option>
           </select>
-          {errors.gender && (
-            <>
-              <br />
-              <small id="gender-error" className="error">
-                {errors.gender}
-              </small>
-            </>
-          )}
-        </p>
+        </FieldShell>
         <TextField
           name="birthDate"
           label="Date of birth (DD/MM/YYYY)"
@@ -148,9 +146,7 @@ export function SignUpPage() {
           placeholder="DD/MM/YYYY"
           {...field}
         />
-        <p>
-          <label htmlFor="country">Country of living</label>
-          <br />
+        <FieldShell name="country" label="Country of living" error={errors.country}>
           <select
             id="country"
             name="country"
@@ -166,23 +162,17 @@ export function SignUpPage() {
               </option>
             ))}
           </select>
-          {errors.country && (
-            <>
-              <br />
-              <small id="country-error" className="error">
-                {errors.country}
-              </small>
-            </>
-          )}
-        </p>
-        <TextField name="height" label="Height, cm" inputMode="numeric" {...field} />
-        <TextField name="weight" label="Weight, kg" inputMode="numeric" {...field} />
-        <button type="submit" disabled={mutation.isPending}>
+        </FieldShell>
+        <div className="form-grid">
+          <TextField name="height" label="Height, cm" inputMode="numeric" {...field} />
+          <TextField name="weight" label="Weight, kg" inputMode="numeric" {...field} />
+        </div>
+        <button type="submit" className="button-primary button-block" disabled={mutation.isPending}>
           {mutation.isPending ? 'Signing up…' : 'Sign up'}
         </button>
       </form>
       {mutation.error && (
-        <p role="alert" className="error">
+        <p role="alert" className="message message-error">
           {signUpErrorMessage(mutation.error)}
           {exists && (
             <>
@@ -192,7 +182,7 @@ export function SignUpPage() {
           )}
         </p>
       )}
-      <p>
+      <p className="card-footer">
         Already registered? <Link to="/sign-in">Sign in</Link>
       </p>
     </section>

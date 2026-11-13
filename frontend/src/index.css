@@ -1,3 +1,8 @@
+/*
+ * Interim style values (CLAUDE.md §5 is pending — no screens yet). Every colour, size and spacing value of the app is
+ * defined once here as a custom property; App.css uses only var(--...). Replaced by src/styles/tokens.css when the
+ * design system task arrives.
+ */
 :root {
   --bg: #ffffff;
   --fg: #16181d;
@@ -5,6 +10,24 @@
   --accent: #6d28d9;
   --border: #e5e7eb;
   --error: #b91c1c;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius: 6px;
+  --radius-lg: 12px;
+  --font-sm: 0.875rem;
+  --font-lg: 1.5rem;
+
+  --content-max: 960px;
+  --card-max: 520px;
+  --card-wide-max: 640px;
+  /* the only literal outside this block: the 560px breakpoint in App.css (custom properties do not work in @media) */
+
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   color: var(--fg);

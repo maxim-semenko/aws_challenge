@@ -7,17 +7,25 @@ import { Profile } from '../profile/Profile'
 export function HomePage() {
   const session = useSession()
 
-  if (isAuthConfigured && session.isPending) return <p>Loading…</p>
+  if (isAuthConfigured && session.isPending) return <p className="status">Loading…</p>
   if (session.data) return <Profile />
 
   return (
-    <section>
+    <section className="card card-centered">
       <h1>AWS Challenge</h1>
-      <p>A serverless learning application on AWS.</p>
+      <p className="muted">A serverless learning application on AWS.</p>
       {isAuthConfigured && (
-        <p>
-          <Link to="/sign-in">Sign in</Link> to see your profile, or <Link to="/sign-up">sign up</Link> for an account.
-        </p>
+        <>
+          <p>Sign in to see your profile, or sign up for an account.</p>
+          <div className="actions">
+            <Link to="/sign-in" className="button button-primary">
+              Sign in
+            </Link>
+            <Link to="/sign-up" className="button">
+              Sign up
+            </Link>
+          </div>
+        </>
       )}
     </section>
   )

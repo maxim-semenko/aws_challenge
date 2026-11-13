@@ -70,7 +70,7 @@ HTML until the design system exists (CLAUDE.md §5).
 | `/sign-up` | anonymous only | form with the 8 fields + password + password confirmation; client-side validation per spec 04; on success the message "activated by an administrator" with a link to sign-in |
 | `/sign-in` | anonymous only | e-mail + password; an unconfirmed user sees "Your account is not activated yet" and stays on the page |
 | `/me`, `/confirm` | — | removed (owner decision 2026-11-13); redirect to `/` |
-| other existing routes (`/chat`, `/admin`) | drafts, not built in Week 2 | nav links only for a signed-in user; without `VITE_API_URL` "Not available yet" and no request |
+| other existing routes (`/chat`, `/admin`) | drafts, not built in Week 2 | nav links only for a signed-in user; "Not available yet — coming in a later week" and no request, whatever `VITE_API_URL` is (owner request 2026-11-13) |
 
 - Amplify is configured once at start-up from the `VITE_*` variables of spec 04 §Inputs; with empty values auth routes are hidden and the home page still renders
   (spec 01).

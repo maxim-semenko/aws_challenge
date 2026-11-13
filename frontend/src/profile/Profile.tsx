@@ -26,24 +26,29 @@ function RoleLineView() {
     if (isUnauthorized(me.error)) void signOutAndRedirect()
   }, [me.error, signOutAndRedirect])
 
-  if (me.isPending) return <p>Role: …</p>
-  return <p>{roleLine(me.isSuccess ? me.data.groups : undefined)}</p>
+  if (me.isPending) return <p className="badge">Role: …</p>
+  return <p className="badge">{roleLine(me.isSuccess ? me.data.groups : undefined)}</p>
 }
 
 /** Read-only profile of the signed-in user from Cognito attributes, shown on Home `/` (ADR-013, spec 04 §Outputs). */
 export function Profile() {
   const attributes = useQuery({ queryKey: userAttributesQueryKey, queryFn: () => fetchUserAttributes() })
 
-  if (attributes.isPending) return <p>Loading…</p>
+  if (attributes.isPending) return <p className="status">Loading…</p>
 
   if (attributes.isError) {
     return (
-      <section>
+      <section className="card">
         <h1>My profile</h1>
-        <p role="alert" className="error">
+        <p role="alert" className="message message-error">
           Could not load your profile.
         </p>
-        <button type="button" onClick={() => void attributes.refetch()} disabled={attributes.isFetching}>
+        <button
+          type="button"
+          className="button-block"
+          onClick={() => void attributes.refetch()}
+          disabled={attributes.isFetching}
+        >
           {attributes.isFetching ? 'Retrying…' : 'Retry'}
         </button>
       </section>
@@ -63,11 +68,11 @@ export function Profile() {
   ]
 
   return (
-    <section>
+    <section className="card">
       <h1>My profile</h1>
-      <dl>
+      <dl className="profile-list">
         {rows.map((row) => (
-          <div key={row.label}>
+          <div key={row.label} className="profile-row">
             <dt>{row.label}</dt>
             <dd>{row.value}</dd>
           </div>

@@ -20,35 +20,37 @@ function Header() {
   const signedIn = Boolean(session.data)
 
   return (
-    <header>
-      <nav>
-        <NavLink to="/" end>
-          Home
-        </NavLink>
-        {signedIn && (
-          <>
-            <NavLink to="/chat">Chat</NavLink>
-            <NavLink to="/admin">Admin</NavLink>
-          </>
-        )}
-      </nav>
-      {isAuthConfigured && !session.isPending && (
-        <div className="row">
-          {signedIn ? (
+    <header className="app-header">
+      <div className="container">
+        <nav>
+          <NavLink to="/" end>
+            Home
+          </NavLink>
+          {signedIn && (
             <>
-              {session.data?.loginId && <span>{session.data.loginId}</span>}
-              <button type="button" onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </>
-          ) : (
-            <>
-              <NavLink to="/sign-in">Sign in</NavLink>
-              <NavLink to="/sign-up">Sign up</NavLink>
+              <NavLink to="/chat">Chat</NavLink>
+              <NavLink to="/admin">Admin</NavLink>
             </>
           )}
-        </div>
-      )}
+        </nav>
+        {isAuthConfigured && !session.isPending && (
+          <div className="header-account">
+            {signedIn ? (
+              <>
+                {session.data?.loginId && <span className="header-user">{session.data.loginId}</span>}
+                <button type="button" onClick={() => void signOut()}>
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <NavLink to="/sign-in">Sign in</NavLink>
+                <NavLink to="/sign-up">Sign up</NavLink>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   )
 }
@@ -57,7 +59,7 @@ export default function App() {
   return (
     <>
       <Header />
-      <main>
+      <main className="container">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<ChatPage />} />

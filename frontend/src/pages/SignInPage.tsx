@@ -59,12 +59,11 @@ export function SignInPage() {
   }
 
   return (
-    <section>
+    <section className="card">
       <h1>Sign in</h1>
-      <form onSubmit={onSubmit} noValidate>
-        <p>
+      <form className="form" onSubmit={onSubmit} noValidate>
+        <div className="field">
           <label htmlFor="email">Email</label>
-          <br />
           <input
             id="email"
             name="email"
@@ -73,17 +72,16 @@ export function SignInPage() {
             value={email}
             onChange={(event) => setEmail(event.currentTarget.value)}
             aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? 'email-error' : undefined}
           />
           {errors.email && (
-            <>
-              <br />
-              <small className="error">{errors.email}</small>
-            </>
+            <small id="email-error" className="field-error">
+              {errors.email}
+            </small>
           )}
-        </p>
-        <p>
+        </div>
+        <div className="field">
           <label htmlFor="password">Password</label>
-          <br />
           <input
             id="password"
             name="password"
@@ -92,29 +90,29 @@ export function SignInPage() {
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
             aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? 'password-error' : undefined}
           />
           {errors.password && (
-            <>
-              <br />
-              <small className="error">{errors.password}</small>
-            </>
+            <small id="password-error" className="field-error">
+              {errors.password}
+            </small>
           )}
-        </p>
-        <button type="submit" disabled={mutation.isPending}>
+        </div>
+        <button type="submit" className="button-primary button-block" disabled={mutation.isPending}>
           {mutation.isPending ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
       {mutation.error && (
-        <p role="alert" className="error">
+        <p role="alert" className="message message-error">
           {signInErrorMessage(mutation.error)}
         </p>
       )}
       {stepMessage && (
-        <p role="alert" className="error">
+        <p role="alert" className="message message-error">
           {stepMessage}
         </p>
       )}
-      <p>
+      <p className="card-footer">
         No account yet? <Link to="/sign-up">Sign up</Link>
       </p>
     </section>

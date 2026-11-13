@@ -77,3 +77,16 @@ protected API, is the visible proof that the SPA reaches a Lambda in the VPC onl
 - Evidence (2026-11-13, local): build and tests green (see T02-04 Notes); with all `VITE_*` empty, headless Chrome
   shows zero console messages and zero API requests on `/`, `/chat`, `/admin`. Page-state tests with mocked
   Amplify/API responses are still **open** (no React Testing Library / jsdom yet). AC-04.6, AC-04.7 **not verified**.
+- 2026-11-13 — **Owner request: layout; Admin/Chat placeholders.** Profile as a centered card "My profile": `<dl>`
+  rows as a two-column grid (muted label, value), separators between rows; the role line, when rendered, is a small
+  badge in the card ("Role: unavailable" on 404/5xx/network kept, spec 04). **Admin "Failed to fetch" fix:** with
+  `VITE_API_URL` set, the draft Admin page called `GET /api/admin/users`, which does not exist in Week 2 (spec 05 has
+  only `GET /api/me`, `GET /api/admin/ping`; the users list is Week 3). `/admin` ("Users") and `/chat` ("Chat") now
+  render `pages/ComingLater.tsx` — "Not available yet — coming in a later week." — and make no request whatever
+  `VITE_API_URL` is. Draft client functions `health`, `search`, `users` and types `DocumentSearchResult`, `UserDto`,
+  `PageResponse` removed from `api/client.ts` (no other user); `endpoints` keeps only `me`. Skill `spa-api-client`
+  and design authentication (routes table) updated. Spec 04 unchanged: the placeholder text still contains "Not
+  available yet" (AC-04.10).
+- Evidence (2026-11-13, local): tests and build green; with `VITE_API_URL=https://dummy-api.invalid` and the public
+  pool ids, `/admin` and `/chat` at 1280px and 360px show the placeholder with zero external requests and zero console
+  messages (details in T02-04 Notes). Profile card layout **not verified** (needs a signed-in session).

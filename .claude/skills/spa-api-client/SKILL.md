@@ -20,8 +20,8 @@ Conventions: CLAUDE.md §6. Endpoint fields: [spec 05](../../../docs/specs/05-pr
 
 - Base URL: `env.apiUrl` from `VITE_API_URL` (trailing `/` removed, no default). The Vite dev proxy to `:8080` was
   removed (ADR-015: no local backend). With an empty `env.apiUrl` the SPA makes **no** API request: the component
-  that calls the API is not mounted (Home: no role line; `/chat`, `/admin`: "Not available yet"; owner decision
-  2026-11-13).
+  that calls the API is not mounted (Home: no role line; owner decision 2026-11-13). `/chat` and `/admin` make no
+  request in Week 2 at all, whatever `VITE_API_URL` says (`pages/ComingLater.tsx`, owner request 2026-11-13).
 - Token: `fetchAuthSession()` → `tokens.accessToken` → `Authorization: Bearer <access token>` (ADR-004; the JWT
   authorizer/handler reject the ID token). Amplify refreshes expired tokens inside `fetchAuthSession()`. Never log the
   header or the token.
@@ -36,5 +36,5 @@ Conventions: CLAUDE.md §6. Endpoint fields: [spec 05](../../../docs/specs/05-pr
 | `fetchUserAttributes` (Cognito, not the API) | Amplify output | `['user-attributes']` | profile on Home |
 | session (`getCurrentUser`) | `Session \| null` | `['auth','session']` | Home, guards, header |
 
-Other draft endpoints (`health`, `search`, `users`) are drafts from before the plan and not part of any spec yet;
-`health` is no longer called (the Home draft was removed 2026-11-13).
+`endpoints` holds only `me`. The pre-plan drafts `health`, `search`, `users` and their types were removed
+(2026-11-13); a later endpoint is added together with its spec (e.g. the users list in Week 3).

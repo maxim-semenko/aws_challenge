@@ -111,3 +111,20 @@ rules must match spec 04 exactly.
     console messages, zero requests.
   - **Not verified** (need the dev User Pool): AC-04.5 (activation message, console confirm), AC-04.8 (sign-out
     part), AC-04.9 (unconfirmed sign-in message).
+- 2026-11-13 — **Owner request: layout.** Plain CSS, no UI library. All colour, spacing, radius, font-size and width
+  values defined once as custom properties in `:root` of `src/index.css` (the existing colours reused, no new hex
+  values; interim until the design-system task, CLAUDE.md §5); `src/App.css` uses only `var(--…)` except the 560px
+  breakpoint (custom properties do not work in `@media`). Header and main in a centered `.container`
+  (max-width `--content-max`); sign-in / sign-up / account-created as centered cards: label above input, full-width
+  inputs and primary button, field error under each field (`aria-describedby`), form-level message box, link to the
+  other form in the card footer; sign-up first/last name and height/weight in a two-column grid from 560px, one
+  column below. Anonymous Home intro: centered card with Sign in / Sign up buttons. Obsolete draft CSS (`.row`,
+  `table`, `pre`, `.results`, `.error`) removed; the template hero/logo styles were already gone. Unused template
+  assets `src/assets/hero.png`, `react.svg`, `vite.svg` left in place (deleting user files needs consent).
+- Evidence (2026-11-13, local): `npm test` 5 files, 48 tests passed; `npm run build` green (CSS 3.7 kB, JS 453 kB).
+  `vite preview` + headless Chrome over the DevTools protocol at 1280px and 360px (capture channel proven by a probe
+  console error and fetch): all `VITE_*` empty → `/` intro card, `/chat` / `/admin` placeholder, `/sign-in` and
+  `/sign-up` → `/`, header only "Home" (**AC-04.10** still holds); public pool/client ids + `VITE_API_URL=
+  https://dummy-api.invalid` (temporary build) → intro card with both buttons, sign-in / sign-up cards render; in both
+  builds zero console messages, zero external requests, no horizontal overflow at 360px. Screenshots checked by eye.
+  **Not verified:** the signed-in profile card (needs a session in the dev pool).
