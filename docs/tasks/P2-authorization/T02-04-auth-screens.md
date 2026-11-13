@@ -2,7 +2,7 @@
 id: T02-04
 title: "Amplify Auth config, sign-up / confirm / sign-in / sign-out screens, route guard"
 phase: P2-authorization
-status: Review
+status: Done
 agent: frontend
 skills: [react-expert]
 depends_on: [T00-04, T02-01]
@@ -137,3 +137,4 @@ rules must match spec 04 exactly.
   - **AC-04.8**, **AC-04.9** — **not verified** on the deployed site (sign-out landing on `/sign-in`; message for an
     account not confirmed yet) — collected by T02-06.
   - Week 2 reduced to the curriculum topic (owner, 2026-11-13): no change to this task's ACs.
+- 2026-11-13: set to `Done` by the owner (Week 2 closed).

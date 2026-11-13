@@ -2,7 +2,7 @@
 id: T02-05
 title: "Personal page (profile on Home) from Cognito attributes"
 phase: P2-authorization
-status: Review
+status: Done
 agent: frontend
 skills: [react-expert]
 depends_on: [T02-04]
@@ -101,3 +101,4 @@ API moved to Week 3 with `GET /api/me`, owner decision 2026-11-13.)
   Proposal: move the component tests to the first Week 3 frontend task (owner decides at the review).
 - Evidence (2026-11-13, local, after the owner's `Profile.tsx` change): `npm test` 5 files, 48 tests passed;
   `npm run build` green (JS 451.5 kB).
+- 2026-11-13: set to `Done` by the owner (Week 2 closed).

@@ -2,7 +2,7 @@
 id: T02-01
 title: "Cognito User Pool and SPA app client"
 phase: P2-authorization
-status: In progress
+status: Done
 agent: devops
 skills: [cloud-architect, cognito-user-pool]
 depends_on: [T00-01]
@@ -100,3 +100,5 @@ the schema was fixed by the owner in Q-14 (option C, 2026-11-12).
   (settings as built by pointer to ENVIRONMENT.md, attribute immutability, owner confirms users in the console,
   change by runbook, verify steps, Week 3 outlook); added to this task's and the devops agent's `skills`. ARCH review
   pending. Remaining before `Review`: the *Extensions* (Lambda triggers) screenshot.
+- 2026-11-13 (owner screenshot): *Extensions → Lambda triggers (0)* — AC-04.1 complete; skill file written → `Review`.
+- 2026-11-13: set to `Done` by the owner (Week 2 closed).

@@ -2,7 +2,7 @@
 id: T02-03
 title: "HTTP API with Cognito JWT authorizer (built by the owner)"
 phase: P2-authorization
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, http-api-jwt]
 depends_on: [T01-04, T02-01]
@@ -114,3 +114,4 @@ behaviour, the `admin` group check and the Lambda code are Week 3.
   (authorizer by pointer to ENVIRONMENT.md, access token and `aud`/`client_id`, explicit methods instead of `ANY`,
   CORS, adding a route by runbook, verify steps, Week 3 items); added to this task's and the devops agent's `skills`.
   ARCH review pending.
+- 2026-11-13: set to `Done` by the owner (Week 2 closed).
