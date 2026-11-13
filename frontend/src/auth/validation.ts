@@ -63,7 +63,6 @@ const DATE_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/
 const EARLIEST_BIRTHDATE = '1900-01-01'
 const MIN_AGE_YEARS = 13
 const INTEGER_PATTERN = /^\d+$/
-const CODE_PATTERN = /^\d{6}$/
 export const HEIGHT_RANGE = { min: 50, max: 250 } as const
 export const WEIGHT_RANGE = { min: 20, max: 300 } as const
 
@@ -143,11 +142,6 @@ export function validateGender(input: string): Result {
 
 export function validateCountry(input: string): Result {
   return isCountryCode(input) ? { value: input } : { error: 'Select a country' }
-}
-
-export function validateConfirmationCode(input: string): Result {
-  const value = input.trim()
-  return CODE_PATTERN.test(value) ? { value } : { error: 'Enter the 6-digit code' }
 }
 
 /** Validates every field; returns the exact SignUp request only when all fields are valid. */

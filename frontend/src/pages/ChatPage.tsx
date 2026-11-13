@@ -1,8 +1,22 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { endpoints } from '../api/client'
+import { env } from '../config/amplify'
 
+/** Draft from before the plan; without VITE_API_URL no request is made (owner decision 2026-11-13). */
 export function ChatPage() {
+  if (!env.apiUrl) {
+    return (
+      <section>
+        <h1>Semantic search</h1>
+        <p>Not available yet.</p>
+      </section>
+    )
+  }
+  return <SearchForm />
+}
+
+function SearchForm() {
   const [query, setQuery] = useState('')
   const search = useMutation({ mutationFn: (q: string) => endpoints.search(q) })
 

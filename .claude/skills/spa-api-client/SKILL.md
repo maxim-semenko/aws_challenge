@@ -19,8 +19,9 @@ Conventions: CLAUDE.md §6. Endpoint fields: [spec 05](../../../docs/specs/05-pr
 ## Client (`frontend/src/api/client.ts`)
 
 - Base URL: `env.apiUrl` from `VITE_API_URL` (trailing `/` removed, no default). The Vite dev proxy to `:8080` was
-  removed (ADR-015: no local backend). Pages that need the API must not call it when `env.apiUrl` is empty
-  (`enabled: Boolean(env.apiUrl)`), and show their "unavailable" state instead.
+  removed (ADR-015: no local backend). With an empty `env.apiUrl` the SPA makes **no** API request: the component
+  that calls the API is not mounted (Home: no role line; `/chat`, `/admin`: "Not available yet"; owner decision
+  2026-11-13).
 - Token: `fetchAuthSession()` → `tokens.accessToken` → `Authorization: Bearer <access token>` (ADR-004; the JWT
   authorizer/handler reject the ID token). Amplify refreshes expired tokens inside `fetchAuthSession()`. Never log the
   header or the token.
@@ -31,9 +32,9 @@ Conventions: CLAUDE.md §6. Endpoint fields: [spec 05](../../../docs/specs/05-pr
 
 | Endpoint | Type | Query key | Used by |
 |---|---|---|---|
-| `GET /api/me` | `MeResponse` `{ id, username, groups, expiresAt }` (spec 05) | `meQueryKey` = `['me']` | `/me` role line, home page draft |
-| `fetchUserAttributes` (Cognito, not the API) | Amplify output | `['user-attributes']` | `/me` |
-| session (`getCurrentUser`) | `Session \| null` | `['auth','session']` | guard, header |
+| `GET /api/me` | `MeResponse` `{ id, username, groups, expiresAt }` (spec 05) | `meQueryKey` = `['me']` | role line of the profile on Home (`profile/Profile.tsx`) |
+| `fetchUserAttributes` (Cognito, not the API) | Amplify output | `['user-attributes']` | profile on Home |
+| session (`getCurrentUser`) | `Session \| null` | `['auth','session']` | Home, guards, header |
 
-Other draft endpoints (`health`, `search`, `users`) are untouched drafts from before the plan and not part of any
-spec yet.
+Other draft endpoints (`health`, `search`, `users`) are drafts from before the plan and not part of any spec yet;
+`health` is no longer called (the Home draft was removed 2026-11-13).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MESSAGES, confirmErrorMessage, resendErrorMessage, signInErrorMessage, signUpErrorMessage } from './errors'
+import { MESSAGES, signInErrorMessage, signUpErrorMessage } from './errors'
 
 function cognitoError(name: string): Error {
   const error = new Error('raw Cognito message')
@@ -19,9 +19,7 @@ describe('error mapping (spec 04 §Edge Cases)', () => {
     expect(signInErrorMessage(cognitoError('TooManyRequestsException'))).toBe(MESSAGES.tooManyAttempts)
   })
 
-  it('confirm and resend', () => {
-    expect(confirmErrorMessage(cognitoError('CodeMismatchException'))).toBe(MESSAGES.invalidCode)
-    expect(resendErrorMessage(cognitoError('LimitExceededException'))).toBe(MESSAGES.tooManyAttempts)
-    expect(resendErrorMessage(new Error('x'))).toBe(MESSAGES.resendFailed)
+  it('sign-in of an unconfirmed user says the account is not activated yet', () => {
+    expect(signInErrorMessage(cognitoError('UserNotConfirmedException'))).toBe(MESSAGES.notActivated)
   })
 })

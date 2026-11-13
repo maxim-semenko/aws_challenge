@@ -2,56 +2,51 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { signIn } from 'aws-amplify/auth'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { errorName, signInErrorMessage } from '../auth/errors'
+import { MESSAGES, signInErrorMessage } from '../auth/errors'
 import { redirectTarget, sessionQueryKey } from '../auth/session'
+import { signInResult, type SignInResult } from '../auth/signInFlow'
 
-interface SignInState {
-  email?: unknown
-  notice?: unknown
-}
-
-function stateString(state: unknown, key: keyof SignInState): string {
-  const value = (state as SignInState | null)?.[key]
+function initialEmail(state: unknown): string {
+  const value = (state as { email?: unknown } | null)?.email
   return typeof value === 'string' ? value : ''
 }
 
-/** /sign-in: e-mail + password via SRP (Amplify default USER_SRP_AUTH); unconfirmed users go to /confirm. */
+const STEP_MESSAGES: Record<Exclude<SignInResult, 'signedIn'>, string> = {
+  notActivated: MESSAGES.notActivated,
+  unsupported: 'This account needs a sign-in step the app does not support.',
+}
+
+/**
+ * /sign-in: e-mail + password via SRP (Amplify default USER_SRP_AUTH). An unconfirmed user stays here with
+ * "Your account is not activated yet" — the owner confirms users in the Cognito console (decision 2026-11-13).
+ */
 export function SignInPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const [email, setEmail] = useState(() => stateString(location.state, 'email'))
+  const [email, setEmail] = useState(() => initialEmail(location.state))
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
-  const [unsupported, setUnsupported] = useState(false)
-  const notice = stateString(location.state, 'notice')
+  const [stepMessage, setStepMessage] = useState('')
   const target = redirectTarget(location.state)
 
   const mutation = useMutation({
     mutationFn: (values: { email: string; password: string }) =>
       signIn({ username: values.email, password: values.password }),
-    onSuccess: async (result, values) => {
-      const step = result.nextStep.signInStep
-      if (step === 'DONE') {
+    onSuccess: async (result) => {
+      const outcome = signInResult(result.nextStep.signInStep)
+      if (outcome === 'signedIn') {
         await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
         navigate(target, { replace: true })
-      } else if (step === 'CONFIRM_SIGN_UP') {
-        navigate('/confirm', { state: { email: values.email } })
       } else {
-        // e.g. a user created in the console with a temporary password; not part of spec 04
-        setUnsupported(true)
-      }
-    },
-    onError: (error, values) => {
-      if (errorName(error) === 'UserNotConfirmedException') {
-        navigate('/confirm', { state: { email: values.email } })
+        setStepMessage(STEP_MESSAGES[outcome])
       }
     },
   })
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setUnsupported(false)
+    setStepMessage('')
     const trimmedEmail = email.trim().toLowerCase()
     const nextErrors = {
       email: trimmedEmail ? undefined : 'Required',
@@ -63,12 +58,9 @@ export function SignInPage() {
     }
   }
 
-  const showError = mutation.error && errorName(mutation.error) !== 'UserNotConfirmedException'
-
   return (
     <section>
       <h1>Sign in</h1>
-      {notice && <p role="status">{notice}</p>}
       <form onSubmit={onSubmit} noValidate>
         <p>
           <label htmlFor="email">Email</label>
@@ -112,14 +104,14 @@ export function SignInPage() {
           {mutation.isPending ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-      {showError && (
+      {mutation.error && (
         <p role="alert" className="error">
           {signInErrorMessage(mutation.error)}
         </p>
       )}
-      {unsupported && (
+      {stepMessage && (
         <p role="alert" className="error">
-          This account needs a sign-in step the app does not support.
+          {stepMessage}
         </p>
       )}
       <p>

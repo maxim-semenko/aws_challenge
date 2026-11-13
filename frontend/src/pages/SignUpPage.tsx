@@ -1,9 +1,9 @@
 import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { countryOptions } from '../auth/countries'
 import { MESSAGES, signUpErrorMessage } from '../auth/errors'
-import { submitSignUp } from '../auth/signUpFlow'
+import { submitSignUp, type SignUpOutcome } from '../auth/signUpFlow'
 import { EMPTY_SIGN_UP_FORM, type FieldErrors, type SignUpField, type SignUpForm } from '../auth/validation'
 
 interface FieldProps {
@@ -48,11 +48,30 @@ function TextField({ name, label, form, errors, onChange, type = 'text', autoCom
   )
 }
 
+type Created = Exclude<SignUpOutcome, { kind: 'invalid' }>
+
+/** Shown after a successful SignUp; the owner activates new users in the Cognito console (decision 2026-11-13). */
+function AccountCreated({ outcome }: { outcome: Created }) {
+  return (
+    <section>
+      <h1>Sign up</h1>
+      <p role="status">
+        {outcome.kind === 'pendingActivation' ? MESSAGES.accountCreatedPending : MESSAGES.accountCreatedDone}
+      </p>
+      <p>
+        <Link to="/sign-in" state={{ email: outcome.email }}>
+          Go to sign in
+        </Link>
+      </p>
+    </section>
+  )
+}
+
 /** /sign-up: all fields of spec 04 §Inputs, validated in the browser before any Cognito call (AC-04.4). */
 export function SignUpPage() {
-  const navigate = useNavigate()
   const [form, setForm] = useState<SignUpForm>(EMPTY_SIGN_UP_FORM)
   const [errors, setErrors] = useState<FieldErrors>({})
+  const [created, setCreated] = useState<Created | null>(null)
   const countries = useMemo(() => countryOptions(), [])
 
   const mutation = useMutation({
@@ -60,10 +79,8 @@ export function SignUpPage() {
     onSuccess: (outcome) => {
       if (outcome.kind === 'invalid') {
         setErrors(outcome.errors)
-      } else if (outcome.kind === 'confirm') {
-        navigate('/confirm', { state: { email: outcome.email } })
       } else {
-        navigate('/sign-in', { state: { email: outcome.email } })
+        setCreated(outcome)
       }
     },
   })
@@ -78,6 +95,8 @@ export function SignUpPage() {
     setErrors({})
     mutation.mutate(form)
   }
+
+  if (created) return <AccountCreated outcome={created} />
 
   const exists = mutation.error ? signUpErrorMessage(mutation.error) === MESSAGES.accountExists : false
   const field = { form, errors, onChange }

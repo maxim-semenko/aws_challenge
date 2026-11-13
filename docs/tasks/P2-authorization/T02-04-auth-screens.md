@@ -90,3 +90,24 @@ rules must match spec 04 exactly.
     Sign up, `/sign-up` and `/confirm` render, anonymous `/me` redirects to `/sign-in`, no console messages.
   - **Not verified** (needs the dev User Pool and a person with a mailbox): AC-04.5, AC-04.8 (sign-out part),
     AC-04.9.
+- 2026-11-13 — **Owner decision after testing the deployed SPA: no e-mail confirmation in the UI.** The owner
+  confirms new users in the Cognito console ("Confirm account"). Removed: `pages/ConfirmPage.tsx`, route `/confirm`,
+  `confirmSignUp` / `resendSignUpCode` usage, `validateConfirmationCode`, the confirm/resend error messages. After
+  `signUp` the page shows "Account created. It will be activated by an administrator; then you can sign in." with a
+  link to `/sign-in`; sign-in of an unconfirmed user (`UserNotConfirmedException` or `CONFIRM_SIGN_UP`) shows "Your
+  account is not activated yet" and stays on `/sign-in` (`auth/signInFlow.ts`). After sign-in the SPA goes to `/`.
+  Chat and Admin nav links are shown only to a signed-in user. Spec 04 (Purpose, Inputs, Outputs, Behaviour, Edge
+  Cases, AC-04.1/.5/.8/.9/.10), design authentication (Proposed Solution, Alternatives, API Design), skill
+  `amplify-auth` updated. The title and scope of this task still say "confirm"; the spec is the reference.
+- Evidence (2026-11-13, local): `npm test` 5 files, 48 tests passed (new `auth/signInFlow.test.ts`; `errors.test.ts`
+  covers `UserNotConfirmedException` → "not activated"; `validation.test.ts` covers `pendingActivation` / `done`);
+  `npm run build` green (JS 454 kB). Runtime check with `vite preview` and headless Chrome over the DevTools protocol
+  (console, exceptions, log entries and every request captured; the channel proven with a probe page that logged an
+  error and made a fetch):
+  - all `VITE_*` empty (**AC-04.10**): `/`, `/me`, `/confirm`, `/sign-in`, `/sign-up` → `/` with the intro, header
+    only "Home"; `/chat`, `/admin` → "Not available yet"; zero console messages, zero API/network requests.
+  - public pool/client ids set, `VITE_API_URL` empty (temporary build, no sign-in attempted): header Home + Sign in /
+    Sign up, no Chat/Admin; `/` intro with both links; `/me`, `/confirm` → `/`; `/sign-in`, `/sign-up` render; zero
+    console messages, zero requests.
+  - **Not verified** (need the dev User Pool): AC-04.5 (activation message, console confirm), AC-04.8 (sign-out
+    part), AC-04.9 (unconfirmed sign-in message).

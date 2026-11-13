@@ -2,7 +2,10 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { redirectTarget, useSession } from './session'
 
-/** Signed-in routes: anonymous visitors go to /sign-in and come back after sign-in (spec 04 Behaviour 8). */
+/**
+ * Signed-in routes: anonymous visitors go to /sign-in and come back after sign-in. No route uses it since the
+ * profile moved to Home (owner decision 2026-11-13); kept for the signed-in pages of later weeks.
+ */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const session = useSession()
   const location = useLocation()
@@ -13,7 +16,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return children
 }
 
-/** Anonymous-only routes (/sign-up, /confirm, /sign-in): a signed-in user goes to the requested page or /me. */
+/** Anonymous-only routes (/sign-up, /sign-in): a signed-in user goes to the requested page or Home `/`. */
 export function AnonymousOnly({ children }: { children: ReactNode }) {
   const session = useSession()
   const location = useLocation()

@@ -1,6 +1,8 @@
 # Design — Authentication (Cognito User Pool + Amplify Auth + SPA screens)
 
-Status: **Accepted** (2026-11-12, owner), with ADR-004; Q-14 answered (option C).
+Status: **Accepted** (2026-11-12, owner), with ADR-004; Q-14 answered (option C). Amended 2026-11-13 by owner
+decisions: no code confirmation in the SPA (the owner confirms users in the console); the profile moved from `/me` to
+Home `/`.
 Requirements: [week-02](../requirements/week-02-authorization.md) W2-G1, W2-G2, W2-G4 (role), S1–S3 ·
 Spec: [04-user-registration-and-sign-in](../specs/04-user-registration-and-sign-in.md)
 Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md) §3.1, §3.4, §5.1, ADR-004, ADR-013, ADR-014, goal G3
@@ -22,10 +24,10 @@ sequenceDiagram
     participant B as Browser (SPA)
     participant C as Cognito User Pool
     participant A as HTTP API + admin Lambda
+    participant O as Owner (Cognito console)
     B->>C: SignUp(email, password, attributes)
-    C-->>B: code sent by e-mail
-    B->>C: ConfirmSignUp(email, code)
-    C-->>B: confirmed
+    C-->>B: user UNCONFIRMED ("activated by an administrator")
+    O->>C: Confirm account
     B->>C: SignIn (SRP)
     C-->>B: ID, access, refresh tokens
     B->>C: GetUser (fetchUserAttributes, access token)
@@ -41,7 +43,7 @@ runbook, Q-12 C):
 |---|---|
 | Feature plan | Lite (no managed login, no threat protection needed); confirm the plan name and price at creation |
 | Sign-in | e-mail is the username attribute (`UsernameAttributes=[email]`), case-insensitive |
-| Self sign-up | enabled; verification of `email` by code (`AutoVerifiedAttributes=[email]`) |
+| Self sign-up | enabled; new users stay `UNCONFIRMED` until the owner confirms them in the console ("Confirm account"; owner decision 2026-11-13). Cognito-assisted verification of `email` (`AutoVerifiedAttributes=[email]`) is still on as built, so Cognito may e-mail a code that the SPA never asks for; the owner may switch it off |
 | Password policy | Cognito default (ARCHITECTURE §3.4) |
 | Attributes | [Q-14](../RISKS.md#q-14) option C: required standard attributes, custom attributes without min/max constraints, validation only in the SPA; field table in spec 04 §Inputs |
 | E-mail sender | Cognito default sender ([R-13](../RISKS.md#2-risk-register)) |
@@ -64,17 +66,18 @@ HTML until the design system exists (CLAUDE.md §5).
 
 | Route | Access | Content |
 |---|---|---|
-| `/` | public | home page (existing) |
-| `/sign-up` | anonymous only | form with the 8 fields + password + password confirmation; client-side validation per spec 04 |
-| `/confirm` | anonymous only | e-mail (pre-filled) + 6-digit code; "resend code" |
-| `/sign-in` | anonymous only | e-mail + password; an unconfirmed user is sent to `/confirm` |
-| `/me` | signed in | personal page: the 8 fields from `fetchUserAttributes`, date shown as `DD/MM/YYYY`, role line from `GET /api/me`, read-only |
-| other existing routes (`/chat`, `/admin`) | unchanged in Week 2 | — |
+| `/` | public | signed in: the personal profile — the 8 fields from `fetchUserAttributes`, date shown as `DD/MM/YYYY`, role line from `GET /api/me` only when `VITE_API_URL` is set, read-only; anonymous: short intro with sign-in / sign-up links |
+| `/sign-up` | anonymous only | form with the 8 fields + password + password confirmation; client-side validation per spec 04; on success the message "activated by an administrator" with a link to sign-in |
+| `/sign-in` | anonymous only | e-mail + password; an unconfirmed user sees "Your account is not activated yet" and stays on the page |
+| `/me`, `/confirm` | — | removed (owner decision 2026-11-13); redirect to `/` |
+| other existing routes (`/chat`, `/admin`) | drafts, not built in Week 2 | nav links only for a signed-in user; without `VITE_API_URL` "Not available yet" and no request |
 
 - Amplify is configured once at start-up from the `VITE_*` variables of spec 04 §Inputs; with empty values auth routes are hidden and the home page still renders
   (spec 01).
-- A route guard checks the session (`fetchAuthSession` / `getCurrentUser`); an anonymous visit to `/me` redirects to
-  `/sign-in` and back after sign-in. After sign-in the user lands on `/me`.
+- The session is read with `getCurrentUser`; Home shows the profile only with a session. After sign-in the user lands
+  on `/`.
+- **No code confirmation in the SPA** (owner decision 2026-11-13, after testing the deployed SPA): the SPA never asks
+  for a confirmation code; the owner confirms each new user in the Cognito console.
 - The date of birth is entered as `DD/MM/YYYY` and sent to Cognito as `YYYY-MM-DD`; the country is a select of
   ISO 3166-1 alpha-2 codes, names via `Intl.DisplayNames` (no hand-written name list).
 - The API client sends the **access** token (ADR-004); `fetchUserAttributes` and `/api/me` are read through
@@ -87,6 +90,11 @@ HTML until the design system exists (CLAUDE.md §5).
 | Auth UI | Own screens on `aws-amplify/auth` (ADR-014) | small bundle; full control of date/country/number fields | more code than the Authenticator | **accepted (ADR-014)** |
 | Auth UI | `Authenticator` without its stylesheet | little code | unstyled, custom fields via `formFields`/`services.handleSignUp` workarounds | rejected |
 | Auth UI | Cognito managed login (hosted UI) + OAuth code flow | no form code | needs a domain and redirect flow; custom date format impossible | rejected |
+| Account confirmation | Owner confirms new users in the Cognito console; no code screen in the SPA | no e-mail round trip for test users; less SPA code; the owner controls who gets in | manual step per user; `email_verified` not set; Cognito may still send an unused code while verification is on | **accepted** (owner, 2026-11-13) |
+| Account confirmation | 6-digit code screen in the SPA (`confirmSignUp`, `resendSignUpCode`) | self-service; verifies the e-mail | depends on the Cognito default sender (R-13 quota, deliverability) | replaced 2026-11-13 |
+| Account confirmation | PreSignUp trigger auto-confirming every user | no manual step | extra Lambda; anyone can register and sign in | rejected |
+| Personal page location | Profile on Home `/` for a signed-in user | one page fewer; the user sees the data right after sign-in | Home has two states (anonymous / signed in) | **accepted** (owner, 2026-11-13) |
+| Personal page location | Separate guarded `/me` page | clear route for the profile | extra nav link and redirect | replaced 2026-11-13 |
 | Personal page data | `fetchUserAttributes` (Cognito `GetUser` with the access token) | always current; standard Amplify API; no backend needed | one Cognito call per page load | **proposed** |
 | Personal page data | ID token claims (`fetchAuthSession().tokens.idToken.payload`) | no network call | values frozen until the token is refreshed; custom attributes as strings | alternative |
 | Personal page data | `GET /api/me` from a PostgreSQL copy | one read path for user and admin | the copy is Week 3 (curriculum) | moved to Week 3 (ADR-013) |
@@ -101,8 +109,8 @@ HTML until the design system exists (CLAUDE.md §5).
 ## API Design
 
 No HTTP endpoint is defined here (see [api-gateway-auth](api-gateway-auth.md)). Cognito operations used by the SPA
-through `aws-amplify/auth`: `signUp`, `confirmSignUp`, `resendSignUpCode`, `signIn`, `signOut`, `fetchAuthSession`,
-`getCurrentUser`, `fetchUserAttributes`. Field names, types, ranges and the mapping to Cognito attributes: spec 04
+through `aws-amplify/auth`: `signUp`, `signIn`, `signOut`, `fetchAuthSession`, `getCurrentUser`,
+`fetchUserAttributes` (`confirmSignUp` and `resendSignUpCode` are not used since 2026-11-13). Field names, types, ranges and the mapping to Cognito attributes: spec 04
 §Inputs. Amplify Hosting environment variables: spec 04 §Inputs "Configuration" (public identifiers, no secrets).
 
 ## Affected Components

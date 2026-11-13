@@ -4,17 +4,15 @@
  */
 
 export const MESSAGES = {
+  accountCreatedPending: 'Account created. It will be activated by an administrator; then you can sign in.',
+  accountCreatedDone: 'Account created. You can sign in now.',
   accountExists: 'An account with this e-mail already exists',
   invalidCredentials: 'Incorrect e-mail or password',
-  invalidCode: 'Invalid code',
-  expiredCode: 'The code has expired, request a new one',
+  notActivated: 'Your account is not activated yet',
   tooManyAttempts: 'Too many attempts, try later',
   passwordPolicy: 'The password does not meet the password policy',
-  alreadyConfirmed: 'This account cannot be confirmed (it may already be confirmed); try signing in',
   signUpFailed: 'Sign-up failed, try again later',
   signInFailed: 'Sign-in failed, try again later',
-  confirmFailed: 'Confirmation failed, try again later',
-  resendFailed: 'Could not send a new code, try again later',
 } as const
 
 export function errorName(error: unknown): string {
@@ -36,19 +34,8 @@ export function signUpErrorMessage(error: unknown): string {
 export function signInErrorMessage(error: unknown): string {
   const name = errorName(error)
   if (name === 'NotAuthorizedException' || name === 'UserNotFoundException') return MESSAGES.invalidCredentials
+  // The owner confirms users manually in the Cognito console (owner decision 2026-11-13)
+  if (name === 'UserNotConfirmedException') return MESSAGES.notActivated
   if (isThrottled(name)) return MESSAGES.tooManyAttempts
   return MESSAGES.signInFailed
-}
-
-export function confirmErrorMessage(error: unknown): string {
-  const name = errorName(error)
-  if (name === 'CodeMismatchException') return MESSAGES.invalidCode
-  if (name === 'ExpiredCodeException') return MESSAGES.expiredCode
-  if (name === 'NotAuthorizedException') return MESSAGES.alreadyConfirmed
-  if (isThrottled(name)) return MESSAGES.tooManyAttempts
-  return MESSAGES.confirmFailed
-}
-
-export function resendErrorMessage(error: unknown): string {
-  return isThrottled(errorName(error)) ? MESSAGES.tooManyAttempts : MESSAGES.resendFailed
 }

@@ -74,12 +74,17 @@ describe('AC-04.4 rejected without a Cognito call', () => {
     expect(signUpFn).not.toHaveBeenCalled()
   })
 
-  it('calls SignUp once for a valid form and asks for confirmation', async () => {
+  it('calls SignUp once for a valid form; the unconfirmed user waits for activation by the owner', async () => {
     const signUpFn = signUpMock()
     const outcome = await submitSignUp(VALID, signUpFn, TODAY)
-    expect(outcome).toEqual({ kind: 'confirm', email: 'anna@example.com' })
+    expect(outcome).toEqual({ kind: 'pendingActivation', email: 'anna@example.com' })
     expect(signUpFn).toHaveBeenCalledTimes(1)
     expect(signUpFn.mock.calls[0][0].options.userAttributes.birthdate).toBe('2000-02-29')
+  })
+
+  it('reports done when Cognito confirms the user at once', async () => {
+    const signUpFn = vi.fn().mockResolvedValue({ isSignUpComplete: true, nextStep: { signUpStep: 'DONE' } })
+    expect(await submitSignUp(VALID, signUpFn, TODAY)).toEqual({ kind: 'done', email: 'anna@example.com' })
   })
 })
 

@@ -117,8 +117,9 @@ Deviations from the curriculum or the challenge diagram:
 - Authentication with Amplify Auth v6 (`aws-amplify/auth` APIs) and own screens (ADR-014).
 - Configuration only through `VITE_*` environment variables (User Pool id, App Client id, API URL, region), set in
   Amplify Hosting.
-- Pages: Home, sign-up / confirm / sign-in, personal page (read-only), later the admin user table and the AI query
-  page.
+- Pages: Home (the signed-in user's read-only profile), sign-up / sign-in (no code confirmation, the owner confirms
+  users in the console — design [authentication](design/authentication.md)), later the admin user table and the AI
+  query page.
 - Delivery: Amplify Hosting builds on every push to `main` (`amplify.yml`, monorepo `appRoot: frontend`), SPA rewrite
   to `index.html`.
 

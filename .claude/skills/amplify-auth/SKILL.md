@@ -1,10 +1,10 @@
 ---
 name: amplify-auth
-description: How the SPA in frontend/ uses aws-amplify v6 Auth against the Cognito User Pool — configuration from VITE_* variables, the auth API calls used by the own sign-up / confirm / sign-in / sign-out screens, the route guard, error mapping and the Vitest unit tests. Use when changing anything in frontend/src/auth, frontend/src/config/amplify.ts or the auth pages.
+description: How the SPA in frontend/ uses aws-amplify v6 Auth against the Cognito User Pool — configuration from VITE_* variables, the auth API calls used by the own sign-up / sign-in / sign-out screens (no code confirmation; the owner confirms users in the console), the profile on Home, route guards, error mapping and the Vitest unit tests. Use when changing anything in frontend/src/auth, frontend/src/config/amplify.ts, frontend/src/profile or the auth pages.
 license: MIT
 metadata:
   domain: frontend
-  triggers: Amplify, aws-amplify/auth, Cognito, signUp, signIn, confirmSignUp, sign-in, sign-up, route guard, VITE_USER_POOL_ID, Vitest
+  triggers: Amplify, aws-amplify/auth, Cognito, signUp, signIn, UserNotConfirmedException, sign-in, sign-up, profile, route guard, VITE_USER_POOL_ID, Vitest
   role: specialist
   scope: implementation
   related-skills: react-expert, spa-api-client
@@ -34,28 +34,32 @@ mirrors it. Resource ids: [docs/ENVIRONMENT.md](../../../docs/ENVIRONMENT.md).
 
 | Call | Where | Notes |
 |---|---|---|
-| `signUp` | `auth/signUpFlow.ts` `submitSignUp` | called only after `validateSignUp` passes; `username` = lower-cased e-mail; `options.userAttributes` exactly the 8 attributes of spec 04 |
-| `confirmSignUp`, `resendSignUpCode` | `pages/ConfirmPage.tsx` | code must match `^\d{6}$` before the call |
-| `signIn` | `pages/SignInPage.tsx` | `nextStep.signInStep`: `DONE` → target page; `CONFIRM_SIGN_UP` or `UserNotConfirmedException` → `/confirm` with the e-mail |
+| `signUp` | `auth/signUpFlow.ts` `submitSignUp` | called only after `validateSignUp` passes; `username` = lower-cased e-mail; `options.userAttributes` exactly the 8 attributes of spec 04; result `pendingActivation` (or `done` if Cognito confirmed at once) → `SignUpPage` shows the `MESSAGES.accountCreated*` text with a link to `/sign-in` |
+| `signIn` | `pages/SignInPage.tsx`, step mapping in `auth/signInFlow.ts` `signInResult` | `DONE` → target page (default `/`); `CONFIRM_SIGN_UP` or `UserNotConfirmedException` → `MESSAGES.notActivated`, stay on `/sign-in` |
 | `signOut` | `auth/session.ts` `useSignOut` | removes all cached queries except the session, then `/sign-in` |
-| `getCurrentUser` | `auth/session.ts` `useSession` | TanStack Query key `['auth','session']`; any error = anonymous (`null`) |
-| `fetchUserAttributes` | `pages/MePage.tsx` (T02-05) | key `['user-attributes']` |
+| `getCurrentUser` | `auth/session.ts` `useSession` | TanStack Query key `['auth','session']`; any error = anonymous (`null`); disabled without auth config |
+| `fetchUserAttributes` | `profile/Profile.tsx`, rendered by `pages/HomePage.tsx` for a signed-in user (T02-05) | key `['user-attributes']` |
 | `Hub.listen('auth')` | `auth/session.ts` `useAuthEvents` | `signedIn`, `signedOut`, `tokenRefresh_failure` invalidate the session |
 
-`autoSignIn` is **not** used: after confirmation the user goes to `/sign-in` (spec 04 Behaviour 4).
+**No code confirmation** (owner decision 2026-11-13): `confirmSignUp`, `resendSignUpCode` and `autoSignIn` are not
+used and there is no `/confirm` route. The owner confirms new users in the Cognito console. `signUpVerificationMethod:
+'code'` stays in the Amplify config only because it mirrors the pool setting.
 
 ## Routes and guard
 
-`/sign-up`, `/confirm`, `/sign-in` are wrapped in `AnonymousOnly` (signed-in users go to the requested page or
-`/me`); `/me` in `RequireAuth` (anonymous → `/sign-in` with `state.from`; after sign-in back to `from`). Only
-same-origin paths starting with a single `/` are accepted as `from` (`redirectTarget`).
+`/sign-up` and `/sign-in` are wrapped in `AnonymousOnly` (signed-in users go to the requested page or `/`). Home `/` is
+public and switches on `useSession`: profile when signed in, intro with sign-in / sign-up links otherwise. `/me` and
+`/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat and Admin only to a signed-in
+user. `RequireAuth` (anonymous → `/sign-in` with `state.from`, back to `from` after sign-in; only same-origin paths
+starting with a single `/` are accepted, `redirectTarget`) is currently unused and kept for later signed-in pages.
 
 ## Validation and errors
 
 - `auth/validation.ts` — one function per field, `validateSignUp` returns either field errors or the exact SignUp
   request. Change ranges in spec 04 first, then here and in the tests.
 - `auth/countries.ts` — the 249 ISO 3166-1 alpha-2 codes; names only from `Intl.DisplayNames(['en'], {type:'region'})`.
-- `auth/errors.ts` — maps `error.name` (Cognito exception name) to the spec 04 messages. Sign-in never shows the raw
+- `auth/errors.ts` — `MESSAGES` holds the user-facing texts of spec 04 and maps `error.name` (Cognito exception name)
+  to them; `UserNotConfirmedException` → "Your account is not activated yet". Sign-in never shows the raw
   Cognito message (no user enumeration). Never `console.log` tokens, form values or errors that may contain them.
 
 ## Tests (Vitest, dev dependency added by T02-04)
@@ -64,5 +68,7 @@ same-origin paths starting with a single `/` are accepted as `from` (`redirectTa
   also type-checked by `npm run build`.
 - AC-04.4 is covered by `auth/validation.test.ts`: each rejected case asserts that the injected `signUp` mock is
   never called. Inject Amplify functions as parameters instead of mocking modules where possible.
+- `auth/signInFlow.test.ts` covers the sign-in step mapping (unconfirmed → not activated); `auth/errors.test.ts` the
+  error messages.
 - Component tests (React Testing Library + jsdom) are not set up yet; add them as dev dependencies and describe them
   here when a task needs them.

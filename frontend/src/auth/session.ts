@@ -61,8 +61,8 @@ export function useSignOut(): () => Promise<void> {
   }, [queryClient, navigate])
 }
 
-/** Target after sign-in: the page the guard redirected from, else /me (spec 04 Behaviour 5, 8). */
+/** Target after sign-in: the page `RequireAuth` redirected from, else Home `/` (spec 04 Behaviour 5). */
 export function redirectTarget(state: unknown): string {
   const from = (state as { from?: unknown } | null)?.from
-  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/me'
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/'
 }

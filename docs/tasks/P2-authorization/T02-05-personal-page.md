@@ -66,3 +66,14 @@ protected API, is the visible proof that the SPA reaches a Lambda in the VPC onl
   green. **Open:** page-state tests with mocked Amplify/API responses need React Testing Library + jsdom (new dev
   dependencies, not added yet).
 - **Not verified:** AC-04.6, AC-04.7 (need the dev pool, T02-03 and `VITE_API_URL`).
+- 2026-11-13 — **Owner decision after testing the deployed SPA: profile on Home.** `pages/MePage.tsx` moved to
+  `profile/Profile.tsx` (heading "My profile"); `pages/HomePage.tsx` shows it for a signed-in user, otherwise a short
+  intro with sign-in / sign-up links. Route `/me` and the "My page" link removed (`/me` → `/` by the catch-all route).
+  **"Failed to fetch" fix:** the draft "API: unreachable" health line and "Who am I (claims from the JWT)" block on
+  Home removed; the role line is mounted only when `VITE_API_URL` is set (no line at all otherwise; 5xx/network still
+  "Role: unavailable"); `/admin` and `/chat` render "Not available yet" and make no request without `VITE_API_URL`
+  (no new Admin/Chat features). Spec 04, design authentication and skills `amplify-auth`, `spa-api-client` updated.
+  The title and scope of this task still say "Personal page at `/me`"; spec 04 is the reference.
+- Evidence (2026-11-13, local): build and tests green (see T02-04 Notes); with all `VITE_*` empty, headless Chrome
+  shows zero console messages and zero API requests on `/`, `/chat`, `/admin`. Page-state tests with mocked
+  Amplify/API responses are still **open** (no React Testing Library / jsdom yet). AC-04.6, AC-04.7 **not verified**.

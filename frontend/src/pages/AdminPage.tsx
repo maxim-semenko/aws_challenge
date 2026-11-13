@@ -1,10 +1,24 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { endpoints } from '../api/client'
+import { env } from '../config/amplify'
 
 const PAGE_SIZE = 20
 
+/** Draft from before the plan; without VITE_API_URL no request is made (owner decision 2026-11-13). */
 export function AdminPage() {
+  if (!env.apiUrl) {
+    return (
+      <section>
+        <h1>Users</h1>
+        <p>Not available yet.</p>
+      </section>
+    )
+  }
+  return <UsersTable />
+}
+
+function UsersTable() {
   const [page, setPage] = useState(0)
   const users = useQuery({
     queryKey: ['admin-users', page],

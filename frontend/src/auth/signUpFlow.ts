@@ -1,9 +1,13 @@
 import { signUp } from 'aws-amplify/auth'
 import { validateSignUp, type FieldErrors, type SignUpForm } from './validation'
 
+/**
+ * `pendingActivation`: Cognito created the user as UNCONFIRMED; the owner confirms it in the Cognito console
+ * (owner decision 2026-11-13, no code confirmation in the SPA). `done`: the user can sign in right away.
+ */
 export type SignUpOutcome =
   | { kind: 'invalid'; errors: FieldErrors }
-  | { kind: 'confirm'; email: string }
+  | { kind: 'pendingActivation'; email: string }
   | { kind: 'done'; email: string }
 
 /**
@@ -20,7 +24,7 @@ export async function submitSignUp(
 
   const { username, password, attributes } = validation.request
   const result = await signUpFn({ username, password, options: { userAttributes: { ...attributes } } })
-  return result.nextStep.signUpStep === 'CONFIRM_SIGN_UP'
-    ? { kind: 'confirm', email: username }
-    : { kind: 'done', email: username }
+  return result.nextStep.signUpStep === 'DONE'
+    ? { kind: 'done', email: username }
+    : { kind: 'pendingActivation', email: username }
 }

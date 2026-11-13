@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { ApiError, endpoints, meQueryKey } from '../api/client'
 import { useSignOut } from '../auth/session'
 import { env } from '../config/amplify'
-import { formatBirthdate, formatCountry, formatMeasure, formatText, roleLine } from '../profile/format'
+import { formatBirthdate, formatCountry, formatMeasure, formatText, roleLine } from './format'
 
 export const userAttributesQueryKey = ['user-attributes'] as const
 
@@ -12,13 +12,12 @@ function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
 }
 
-/** Role line from GET /api/me; "Role: unavailable" without VITE_API_URL or on 5xx/network errors (spec 04). */
+/** Role line from GET /api/me; "Role: unavailable" on 5xx/network errors (spec 04). Mounted only with VITE_API_URL. */
 function RoleLineView() {
   const signOutAndRedirect = useSignOut()
   const me = useQuery({
     queryKey: meQueryKey,
     queryFn: endpoints.me,
-    enabled: Boolean(env.apiUrl),
     retry: (failureCount, error) => !isUnauthorized(error) && failureCount < 1,
   })
 
@@ -27,12 +26,12 @@ function RoleLineView() {
     if (isUnauthorized(me.error)) void signOutAndRedirect()
   }, [me.error, signOutAndRedirect])
 
-  if (env.apiUrl && me.isPending) return <p>Role: …</p>
+  if (me.isPending) return <p>Role: …</p>
   return <p>{roleLine(me.isSuccess ? me.data.groups : undefined)}</p>
 }
 
-/** /me: read-only personal page from Cognito attributes (ADR-013, spec 04 §Outputs). */
-export function MePage() {
+/** Read-only profile of the signed-in user from Cognito attributes, shown on Home `/` (ADR-013, spec 04 §Outputs). */
+export function Profile() {
   const attributes = useQuery({ queryKey: userAttributesQueryKey, queryFn: () => fetchUserAttributes() })
 
   if (attributes.isPending) return <p>Loading…</p>
@@ -40,7 +39,7 @@ export function MePage() {
   if (attributes.isError) {
     return (
       <section>
-        <h1>My page</h1>
+        <h1>My profile</h1>
         <p role="alert" className="error">
           Could not load your profile.
         </p>
@@ -65,7 +64,7 @@ export function MePage() {
 
   return (
     <section>
-      <h1>My page</h1>
+      <h1>My profile</h1>
       <dl>
         {rows.map((row) => (
           <div key={row.label}>
@@ -74,7 +73,8 @@ export function MePage() {
           </div>
         ))}
       </dl>
-      <RoleLineView />
+      {/* Without VITE_API_URL the role line is not rendered and no request is made (owner decision 2026-11-13) */}
+      {env.apiUrl && <RoleLineView />}
     </section>
   )
 }
