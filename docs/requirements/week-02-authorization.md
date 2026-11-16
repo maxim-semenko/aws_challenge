@@ -47,4 +47,4 @@ Authorization: Cognito User Pool with Amplify Auth; HTTP API Gateway with JWT au
 |---|---|
 | W2-G1, W2-G2, S1–S3 | [04-user-registration-and-sign-in](../specs/04-user-registration-and-sign-in.md) |
 | W2-G3, S4 | [05-protected-api](../specs/05-protected-api.md) |
-| W2-G4, W2-G5, S5, S6, S7 | moved to Week 3 (not planned yet) |
+| W2-G4, W2-G5, S5, S6, S7 | moved to Week 3 — [week-03](week-03-rest-api-data.md) traceability (specs 06–09) |

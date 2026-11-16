@@ -10,7 +10,7 @@ Rules here override any skill or agent file.
 | `CLAUDE.md` | rules, tech stack, design tokens, API conventions, invariants | the only place for these |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | principles, components, **recorded decisions (ADRs)**, goal traceability G1–G8 | system-wide only |
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | identifiers and settings of the AWS resources as built by the owner (no account id, no secrets) | the only place for these; updated by every task that creates or changes a resource |
-| `lambdas/<function>/` | Python code of each Lambda function (`admin`, `chatbot`, `sync`) | code mirrors what is deployed |
+| `lambdas/<function>/` | Python code of each Lambda function (`admin`, `chatbot`, `sync`, `post-confirmation`) | code mirrors what is deployed |
 | [docs/RISKS.md](docs/RISKS.md) | **open** decisions `Q-xx` (block tasks), risks `R-xx` | an answered `Q-xx` becomes an ADR or a design-doc decision |
 | [docs/requirements/](docs/requirements/) | export of each curriculum week, as given | input only, never rewritten |
 | [docs/design/](docs/design/) | one design doc per feature: Problem Statement, Proposed Solution, Alternatives Considered, API Design, Affected Components, Security Considerations, Open Questions (+ optional Cost) | `Accepted` by the owner before any task of the feature starts |
@@ -29,7 +29,7 @@ decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (Week 2 — authorization — closed 2026-11-13; next: Week 3, not planned yet).
+planned** (Week 3 planned 2026-11-13; now: Week 3 — REST API + data).
 
 ## 3. Working rules (mandatory)
 
@@ -57,7 +57,7 @@ planned** (Week 2 — authorization — closed 2026-11-13; next: Week 3, not pla
 
 | Area | Choice | Status |
 |---|---|---|
-| Server code | Python 3.13 AWS Lambda functions `admin`, `chatbot`, `sync`, zip deploys, one directory per function under `lambdas/`; no backend application (ADR-015) | accepted |
+| Server code | Python 3.12 AWS Lambda functions `admin`, `chatbot`, `sync` (also applies the SQL migrations, ADR-017), `post-confirmation` (ADR-016), zip deploys, one directory per function under `lambdas/`; no backend application (ADR-015) | accepted |
 | Lambda libraries | `boto3` (runtime), `pg8000`, Powertools for AWS Lambda (Python) Logger from Week 6, `pytest` | proposed in ADR-015 |
 | AWS SDK | `boto3` in Lambdas; JS SDK v3 only through `aws-amplify` | accepted |
 | Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, dimension per ADR-007 / Q-15; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
@@ -65,7 +65,7 @@ planned** (Week 2 — authorization — closed 2026-11-13; next: Week 3, not pla
 | AWS changes | made by the owner in the AWS console from a devops console runbook in the task (§3.11, Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (console runbooks); IaC pending Q-02 |
 | Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
 | Tests | `pytest` (Lambdas); frontend test runner introduced by the first task that needs one; Playwright for E2E (planned) | — |
-| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 (needed from the Week 3 Admin Lambda task), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
+| Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 for local tests and packaging (Lambda runtime 3.12, code 3.12-compatible), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
 
 Exact library versions live in each `lambdas/<function>/requirements.txt` and in `frontend/package.json`, nowhere
 else.
@@ -101,7 +101,7 @@ ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) a
 
 ## 7. Conventions
 
-- **Python (Lambdas):** Python 3.13 with type hints; one directory per function `lambdas/<function>/` with its own
+- **Python (Lambdas):** Python 3.12 runtime with type hints (local tests on 3.13; no 3.13-only API); one directory per function `lambdas/<function>/` with its own
   pinned `requirements.txt` (pure-Python packages, so a zip built on Windows runs on Lambda); handler entry point
   `lambda_handler(event, context)`; clients and config at module level, no network call or DB connection at init;
   parameterised SQL only; pytest with AWS and database access replaced by test doubles. Layout details and commands:
@@ -160,7 +160,7 @@ Skills in `.claude/skills/` are copied from [jeffallan/claude-skills](https://gi
 Spring Cloud, replication) were removed, the rest is kept as is.
 
 **Project overrides — they win over any skill text:**
-- Python 3.13 Lambda functions as zip deploys (ADR-015) — no backend application, containers, Kubernetes or GitOps.
+- Python 3.12 Lambda functions as zip deploys (ADR-015) — no backend application, containers, Kubernetes or GitOps.
 - Agents never access AWS (§3.11): every `aws ...` CLI/SDK example in a skill is reference only; AWS changes are
   console runbooks executed by the owner (Q-12 C); IaC per Q-02 later; Terraform advice applies only if Q-02 chooses it.
 - Vite SPA without Server Components; vector dimension per ADR-007 / Q-15; secrets in Secrets Manager.
@@ -181,7 +181,7 @@ skills use `source: project` and name the task that created them.
 ## 9. Commands
 
 ```bash
-docker compose up -d                       # local PostgreSQL + pgvector on :5432 (major 17, see R-14)
+docker compose up -d                       # local PostgreSQL + pgvector on :5432 (major 14, see R-14; image switched by T03-02)
 cd frontend && npm ci && npm run dev       # http://localhost:5173 (calls the dev API from VITE_API_URL)
 npm run build
 # Lambda commands (pytest, zip) are added by the Week 3 Admin Lambda task with the python-lambda skill

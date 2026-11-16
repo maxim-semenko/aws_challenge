@@ -1,7 +1,7 @@
 # Spec 01 — SPA delivery from Git through CloudFront
 
 Requirements: [week-01](../requirements/week-01-environment.md) W1-G1, S1, S2 · Design: [spa-hosting](../design/spa-hosting.md)
-Tasks: T00-02, T00-04, T01-05, T01-06; AC-01.4 deferred to T00-03 (Q-12 C)
+Tasks: T00-02, T00-04, T01-05, T01-06; AC-01.4 deferred to T00-03 (Q-12 C); AC-01.2 fix T03-09, re-checked by T03-10
 
 ## Purpose
 

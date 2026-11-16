@@ -8,6 +8,10 @@ Reduced 2026-11-13 (owner: Week 2 = the curriculum topic only). **Moved to Week 
 Lambda code in Git, `GET /api/me`, `GET /api/admin/ping`, the `admin` group check (403), the `token_use` check, the
 handler's `application/problem+json` errors, the role line in the SPA, the API access log and the log-content checks.
 
+Week 3 (planned 2026-11-13, [spec 08](08-admin-api.md)): the routes `GET /admin` and `POST /chat` are replaced by
+`GET /api/me` and `GET /api/admin/users`; AC-05.2's route list is then superseded by AC-08.3, the authorizer
+behaviour (AC-05.1, AC-05.3 … AC-05.6) applies to the new routes.
+
 ## Purpose
 
 The HTTP API `aws-challenge-api`, built by the owner in the console, is the only public door to the functions: a

@@ -5,7 +5,9 @@ Design: [authentication](../design/authentication.md)
 Tasks: T02-01, T02-04, T02-05, T02-06
 
 Reduced 2026-11-13 (owner: Week 2 = the curriculum topic only): the group `admin` and the role line on the profile
-(`GET /api/me`) are **moved to Week 3** (AC-04.3 and AC-04.7 withdrawn).
+(`GET /api/me`) are **moved to Week 3** (AC-04.3 and AC-04.7 withdrawn). Week 3 (planned 2026-11-13): role line,
+admin-only nav and the `/admin` table are specified in [spec 09](09-admin-page-and-role.md); Behaviour 9 below then
+holds only while `VITE_API_URL` is empty (AC-04.10 unchanged).
 
 ## Purpose
 

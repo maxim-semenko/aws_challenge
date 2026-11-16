@@ -23,7 +23,28 @@ Source: the owner's VPC console screenshot, 2026-11-12 (evidence for T01-06).
 
 | Item | Value |
 |---|---|
-| Lambda functions | `aws-challenge-admin`, `aws-challenge-chatbot`, `aws-challenge-sync` — by the naming convention; exact names to be confirmed by the owner. Runtime Python. Code in Git under [`lambdas/`](../lambdas/) |
+| Lambda functions | `aws-challenge-admin`, `aws-challenge-chatbot`, `aws-challenge-sync` (names confirmed 2026-11-16); zip, **Python 3.12** (ADR-015 revised 2026-11-16: 3.12 is the target, no runtime switch); no `aws-challenge-migrate` (never created; runner lives in `sync`, ADR-017 revised); API Gateway trigger on `admin` and `chatbot`. Code in Git under [`lambdas/`](../lambdas/) |
+| `aws-challenge-sync` settings (2026-11-16, before T03-03) | 128 MB, timeout 3 s, x86_64, handler `lambda_function.lambda_handler`, no env vars, no layers; role `aws-challenge-sync-role-q8b1jajy` with `AWSLambdaBasicExecutionRole-…` (logs only). `admin` and `chatbot` are configured the same way, each with its own console-created role (owner) |
+| Lambda VPC config (all three) | `aws-challenge-vpc`; subnets `subnet-0158cc34af19a05c3` (`aws-challenge-subnet-private1-eu-west-1a`, 10.0.128.0/20), `subnet-0686f4fa10f9d139a` (`aws-challenge-subnet-private2-eu-west-1b`, 10.0.144.0/20); security groups `sg-09356f785149eeb60` (default) + `sg-01f3496b63a8a0e7e` (`aws-challenge-db-sg`) |
+| RDS instance endpoint | `aws-challenge-db.cbk4syqsq9pn.eu-west-1.rds.amazonaws.com:5432` (owner, 2026-11-16; used by the Week 1 TCP probe) |
+| Week 1 `admin` probe | TCP connect to the instance endpoint on 5432 only — no driver, no credentials, not through RDS Proxy (T03-03 Notes) |
+
+## Database (Week 1, T01-02)
+
+Source: the owner's console screenshots, 2026-11-16.
+
+| Item | Value |
+|---|---|
+| DB instance | `aws-challenge-db`, PostgreSQL 14.18, `db.t4g.micro` (2 vCPU, 1 GB), `eu-west-1a`, single-AZ; gp2 20 GiB, autoscaling on; encrypted (`aws/rds`); RDS Extended Support disabled (R-14) |
+| Master user / DB name | `postgres` / none set at creation (the default database `postgres` exists) |
+| IAM DB authentication (instance) | not enabled |
+| RDS Proxy | `proxy-1793961665875-aws-challenge-db` (`prx-019d0caac664f7be9`), engine family PostgreSQL |
+| Proxy endpoint | `proxy-1793961665875-aws-challenge-db.proxy-cbk4syqsq9pn.eu-west-1.rds.amazonaws.com` (read/write) |
+| Proxy settings | Require TLS: **enabled** (2026-11-16, T03-03); idle client timeout 30 min; enhanced logging off; IAM role `rds-proxy-role-1793961664993`; security group `sg-01f3496b63a8a0e7e`; subnets `subnet-0158cc34af19a05c3`, `subnet-0686f4fa10f9d139a` |
+| Proxy authentication | secret `rds-db-credentials/…/postgres` (RDS-managed master secret), client auth SCRAM SHA 256, **IAM authentication: Required** (2026-11-16, T03-03) |
+| Proxy target group | `default` → `aws-challenge-db`, **Available** since 2026-11-16 (was Unavailable until the self-referencing SG rule below was added) |
+| Security group `aws-challenge-db-sg` (`sg-01f3496b63a8a0e7e`) | created by the RDS console; inbound: TCP 5432 from itself (`sg-01f3496b63a8a0e7e`, "proxy and lambdas to db", added 2026-11-16) and TCP 5432 from `185.53.96.139/32` (one external IP, not needed — the DB has no public access); outbound: all traffic to `0.0.0.0/0` (owner evidence 2026-11-16, T03-03 step 1); attached to the proxy, the DB instance (assumed) and all three Lambdas |
+| Default security group | `sg-09356f785149eeb60`: inbound all traffic from itself; attached to all three Lambdas |
 
 ## Authentication (Week 2, T02-01)
 
@@ -42,6 +63,7 @@ Source: the owner, 2026-11-12. Both ids are public (they ship in the SPA bundle)
 | App client auth flows | choice-based sign-in (`ALLOW_USER_AUTH`), SRP (`ALLOW_USER_SRP_AUTH`), refresh (`ALLOW_REFRESH_TOKEN_AUTH`) |
 | Token validity | access 60 min, ID 60 min, refresh 5 days, auth session 3 min; token revocation on; prevent user existence errors on |
 | Cognito domain (managed login, not used by the SPA — ADR-014) | `https://eu-west-1mhey7llvv.auth.eu-west-1.amazoncognito.com` |
+| Groups | `admin` (created 2026-11-16, T03-01): no IAM role, no precedence; members: `test@gmail.com` |
 | Issuer (for the JWT authorizer, T02-03) | `https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_MhEy7LlVv` |
 
 ## Amplify Hosting (Week 1 T01-05, Week 2)
@@ -58,6 +80,8 @@ Source: the owner's console screenshots, 2026-11-12. App `aws_challenge`, all br
 | `VITE_USER_POOL_ID` | User Pool id above |
 | `VITE_USER_POOL_CLIENT_ID` | App client id above |
 | `VITE_API_URL` | HTTP API endpoint below |
+
+Rewrites and redirects (since 2026-11-16, T03-09): one rule — source `</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>` → `/index.html`, type `200 (Rewrite)` (replaced the default `/<*>` 404-rewrite).
 
 The SPA reads exactly these names (`frontend/src/config/amplify.ts`, aligned by T02-04; no default region).
 
@@ -76,5 +100,4 @@ Source: the owner's console screenshots, 2026-11-13; unauthenticated probes of t
 
 ## Not recorded yet
 
-Supplied by the owner when a task needs them: security groups, RDS instance class and PostgreSQL minor version, RDS
-Proxy endpoint and settings, function memory/timeout/role, Amplify app id.
+Supplied by the owner when a task needs them: DB instance security groups (Connectivity & security → Security section), function memory/timeout/role, Amplify app id.

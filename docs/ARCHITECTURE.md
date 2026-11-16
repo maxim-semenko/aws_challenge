@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — AWS Challenge
 
-Status: **draft v0.6 (2026-11-12)**. This file holds the system-wide principles, components and ADRs. Decisions
+Status: **draft v0.9 (2026-11-16, ADR-015 / ADR-017 revised by the owner: Python 3.12, no `migrate` function)**. This file holds the system-wide principles, components and ADRs. Decisions
 marked *Proposed* need the owner's confirmation and are not implemented before that. Feature-level detail lives in
 [design/](design/) (one doc per feature, written before coding), behaviour in [specs/](specs/), open decisions and
 risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
@@ -21,7 +21,7 @@ risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
 3. **Least privilege:** one IAM role per function, scoped to exact resource ARNs.
 4. **Secrets never leave Secrets Manager:** not in code, env var values, logs or Git.
 5. **Reproducible changes:** every AWS change is a console runbook in its task Notes now, IaC later
-   ([Q-02](RISKS.md#q-02), T00-03); schema through versioned SQL migrations ([Q-16](RISKS.md#q-16)); code from Git.
+   ([Q-02](RISKS.md#q-02), T00-03); schema through versioned SQL migrations (ADR-017); code from Git.
 6. **Observable:** one JSON log line per event, correlated across the chain (G8).
 7. **Decide before building:** ADR or design doc first, alternatives with trade-offs, the owner decides.
 
@@ -49,8 +49,8 @@ Only the current week is planned ([PLAN.md](PLAN.md)); later rows are input for 
 | Week | Topic (as given) | State |
 |---|---|---|
 | 1 | Environment: Amplify Hosting + CloudFront; VPC; RDS PostgreSQL **14** + RDS Proxy; three Lambdas (Admin, Chatbot, Sync); `SELECT 1` from Admin; log groups | [requirements](requirements/week-01-environment.md); built manually, accepted by the owner 2026-11-12 |
-| 2 | Authorization: Cognito User Pool with Amplify Auth; HTTP API Gateway with JWT authorizer | [requirements](requirements/week-02-authorization.md); planned |
-| 3 | REST API + data: Admin Lambda ↔ RDS Proxy; Sync chain Cognito → **EventBridge** → Lambda | not planned |
+| 2 | Authorization: Cognito User Pool with Amplify Auth; HTTP API Gateway with JWT authorizer | [requirements](requirements/week-02-authorization.md); done 2026-11-13 |
+| 3 | REST API + data: Admin Lambda ↔ RDS Proxy; Sync chain Cognito → **EventBridge** → Lambda | [requirements](requirements/week-03-rest-api-data.md); planned 2026-11-13 — designs [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) (Accepted 2026-11-13) |
 | 4 | Create the `pgvector` extension; a function generates **1536-dimensional** vectors stored in `users.embedding`; similarity query `ORDER BY embedding <-> $1 LIMIT 5`; the Sync Lambda calls Bedrock Titan Embeddings (or Claude 3.5 Sonnet) on insert/update; `ivfflat` or `hnsw` index; check latency on 1000 records | not planned; conflict with ADR-007 → [Q-15](RISKS.md#q-15) |
 | 5 | SPA search component → Chatbot Lambda → Bedrock Agent (NL→SQL if the query contains the keyword "sql", otherwise embedding similarity). Goals: results < 1 s; "users similar to …" returns the correct TOP-5; API Gateway timeout 29 s, Lambda 30 s; log latency and token count | not planned |
 | 6 | JSON logs (Powertools Logger, Lambda advanced logging controls), CloudWatch Logs Insights, X-Ray service map | not planned |
@@ -58,9 +58,8 @@ Only the current week is planned ([PLAN.md](PLAN.md)); later rows are input for 
 Notes for later planning:
 - Week 3 says "REST API", while G4 and Week 2 say "HTTP API Gateway": ADR-003 (HTTP API) is kept; "REST" is read as
   the API style, not the API Gateway product.
-- Week 3 requires EventBridge in the sync chain (ADR-011 rejected). Cognito invokes Lambda triggers directly and has
-  no native delivery of the PostConfirmation event to EventBridge; candidate wirings (trigger → `PutEvents` → rule →
-  Sync Lambda; EventBridge rule on CloudTrail events) are compared when Week 3 is planned, together with R-02 / R-11.
+- Week 3 requires EventBridge in the sync chain (ADR-011 rejected). The wirings are compared in
+  [design/user-sync](design/user-sync.md); decided as ADR-016 ([Q-17](RISKS.md#q-17) A).
 - Week 4 stores embeddings in the users table, so the chatbot searches users, not a separate document corpus
   ([Q-05](RISKS.md#q-05)).
 
@@ -79,13 +78,15 @@ flowchart LR
     U[Browser] -->|HTTPS| CF[CloudFront<br/>managed by Amplify Hosting]
     CF --> S3[(Amplify Hosting<br/>static SPA)]
     U -->|sign-up / sign-in| COG[Cognito User Pool]
-    COG -.->|Week 3: via EventBridge| LS
+    COG -->|Week 3: PostConfirmation trigger| LP[Lambda: post-confirmation<br/>outside the VPC]
+    LP -->|PutEvents| EB[EventBridge bus<br/>aws-challenge-events]
+    EB -->|rule| LS
     U -->|"Authorization: Bearer JWT"| APIGW[API Gateway<br/>HTTP API + JWT authorizer]
 
     subgraph VPC["VPC aws-challenge-vpc — private subnets (§4)"]
         LC[Lambda: chatbot]
         LA[Lambda: admin]
-        LS[Lambda: sync]
+        LS[Lambda: sync<br/>+ migrations on owner invoke]
         PX[RDS Proxy]
         DB[(RDS PostgreSQL 14<br/>+ pgvector from Week 4)]
     end
@@ -124,24 +125,26 @@ Deviations from the curriculum or the challenge diagram:
   to `index.html`.
 
 ### 3.2 Lambda functions (ADR-015)
-All server-side code is Python 3.13 Lambda functions, deployed as zip files; there is no backend application.
-Function names `aws-challenge-<function>` (§4).
+All server-side code is Python 3.12 Lambda functions (runtime of the existing functions; code stays 3.12-compatible
+while local tests run on 3.13), deployed as zip files; there is no backend application. Function names
+`aws-challenge-<function>` (§4). Only the curriculum's three functions plus the trigger exist (owner, 2026-11-16).
 
 | Function | Trigger | Responsibility | From |
 |---|---|---|---|
-| `admin` | HTTP API | `/api/me`, `/api/admin/*`; Week 1 `SELECT 1` probe on a direct invoke | Week 1 (probe), Week 3 (API) |
+| `admin` | HTTP API | `/api/me`, `/api/admin/*` (Week 1 `SELECT 1` probe dropped in Week 3) | Week 1 (probe), Week 3 (API) |
 | `chatbot` | HTTP API | `/api/chat/*`: similarity search, Bedrock Agent | Week 5 |
-| `sync` | Cognito → EventBridge chain | copy of the user into PostgreSQL, embedding on insert/update | Week 3, Week 4 |
+| `sync` | EventBridge rule (`UserConfirmed`); direct invoke by the owner (`{"action":"status"\|"migrate"}`) | copy of the user into PostgreSQL, embedding on insert/update (Week 4); applies versioned SQL migrations on the owner's invoke (ADR-017) | Week 3, Week 4 |
+| `post-confirmation` | Cognito PostConfirmation trigger | puts `UserConfirmed` on the bus; outside the VPC | Week 3 (ADR-016) |
 
-Source layout (one directory per function under `lambdas/`) and packaging are fixed by the Week 3 task that brings
-`admin` into Git, with its skill file. The Week 1 code of all three functions exists only in the AWS console until
-their weeks bring it into Git
+Source layout, packaging (shared DB helper copied into each zip) and tests: [design/user-sync](design/user-sync.md)
+§5 and the `python-lambda` skill (T03-02). `chatbot` code stays only in the AWS console until Week 5
 ([R-15](RISKS.md#2-risk-register)).
 
 ### 3.3 API Gateway (HTTP API)
 Week 2 as built (design [api-gateway-auth](design/api-gateway-auth.md), values in [ENVIRONMENT.md](ENVIRONMENT.md)):
 JWT authorizer on `GET /admin` and `POST /chat`, CORS for the Amplify origin only, no access log, no endpoint contract.
-The bullets below are the target; Week 3 decides how the built API reaches it.
+The bullets below are the target; Week 3 reaches it ([design/admin-api](design/admin-api.md) §3: `/api` routes, old
+routes deleted, access log, throttling, localhost CORS).
 - JWT authorizer: issuer `https://cognito-idp.<region>.amazonaws.com/<userPoolId>`, audience `<appClientId>`
   (for access tokens API Gateway matches `client_id`, because they carry no `aud`).
 - Only explicit `METHOD /path` routes, no `ANY` / `$default` route, so CORS preflight is answered by API Gateway
@@ -160,15 +163,18 @@ The bullets below are the target; Week 3 decides how the built API reaches it.
   attributes and their validation: [spec 04](specs/04-user-registration-and-sign-in.md) ([Q-14](RISKS.md#q-14)
   option C: validation only in the SPA, custom attributes without min/max); they are immutable once the pool exists.
 - Public app client (no secret), SRP flow. Tokens: access/ID 60 min, refresh 5 days (as built, T02-01).
-- Group `admin` (Week 3), members added manually by the owner in the Cognito console.
-- Week 2 uses Cognito as the only profile store (ADR-013); the copy in PostgreSQL arrives with the Week 3 sync chain.
+- Group `admin` (Week 3, T03-01), members added manually by the owner in the Cognito console.
+- Week 2 uses Cognito as the only profile store (ADR-013); the copy in PostgreSQL arrives with the Week 3 sync chain
+  (PostConfirmation trigger, ADR-016); the personal page keeps reading Cognito in Week 3 ([Q-19](RISKS.md#q-19) A).
 
 ### 3.5 Data: RDS PostgreSQL + RDS Proxy
 - RDS PostgreSQL **14** (Week 1 curriculum and build; standard support deadline in [R-14](RISKS.md#2-risk-register)),
   single-AZ, encrypted; instance class and backups as built (not recorded yet, §4).
-- RDS Proxy: credentials from Secrets Manager, TLS.
+- RDS Proxy: credentials towards RDS from Secrets Manager, TLS; the functions authenticate with IAM auth tokens
+  (ADR-006 revised, [Q-18](RISKS.md#q-18) A).
 - Lambda connects **only** to the proxy endpoint, one connection per invocation, opened lazily (not at init).
-- Schema through versioned SQL migrations ([Q-16](RISKS.md#q-16)); the first schema (users table) comes in Week 3.
+- Schema through versioned SQL migrations (ADR-017, [Q-16](RISKS.md#q-16) A); the first schema (users table)
+  comes in Week 3.
 - Extension `vector` and the similarity index from Week 4 (ADR-007, [Q-15](RISKS.md#q-15)).
 
 ### 3.6 Amazon Bedrock
@@ -196,7 +202,8 @@ environment (by the owner), if ever needed.
 ### 5.1 Sign-up (Week 2)
 SPA → Cognito `SignUp` (e-mail, password, profile attributes) → the owner confirms the account in the Cognito
 console → `SignIn` (SRP).
-No trigger in Week 2; Week 3 adds the sync chain to PostgreSQL.
+No trigger in Week 2. Week 3 (ADR-016): the confirmation fires the PostConfirmation trigger → `UserConfirmed` on
+EventBridge → Sync Lambda → upsert into `users` ([spec 07](specs/07-user-sync.md)).
 
 ### 5.2 Authenticated request
 1. SPA obtains tokens via Amplify (`fetchAuthSession`, automatic refresh).
@@ -214,10 +221,9 @@ query containing "sql" into SQL. Designed when Weeks 4 and 5 are planned.
 
 | Method | Path | Auth | Body / parameters | Response | Week |
 |---|---|---|---|---|---|
-| ANY | `/admin`, `/chat` | JWT | — | no contract; proves the authorizer only — [spec 05](specs/05-protected-api.md) | 2 (as built) |
-| GET | `/api/me` | JWT | — | caller's token claims | 3 (to be specified; moved from Week 2) |
-| GET | `/api/admin/ping` | JWT + `admin` | — | admin probe | 3 (to be specified; moved from Week 2) |
-| GET | `/api/admin/users` | JWT + `admin` | `page`, `size(1..100)` | `{items[], page, size, total}` | 3 (to be specified) |
+| GET / POST | `/admin` / `/chat` | JWT | — | no contract; proves the authorizer only — [spec 05](specs/05-protected-api.md) | 2 (as built); deleted in Week 3 |
+| GET | `/api/me` | JWT | — | `{id, username, groups, expiresAt}` from the token claims — [spec 08](specs/08-admin-api.md) | 3 |
+| GET | `/api/admin/users` | JWT + `admin` | `page`, `size(1..100)`, `sort` | `{items[], page, size, total}` — [spec 08](specs/08-admin-api.md) | 3 |
 | POST | `/api/chat/search` | JWT | to be specified | to be specified | 5 |
 
 Conventions (auth header, pagination, filtering, errors): CLAUDE.md §6. 502 is used for Bedrock failures.
@@ -226,22 +232,24 @@ Conventions (auth header, pagination, filtering, errors): CLAUDE.md §6. 502 is 
 
 ## 7. Data model
 
-No application table exists yet. Week 3 creates the users table (copy of the Cognito profile, key = Cognito `sub`);
-Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in those weeks' specs.
+Week 3 creates `users` (copy of the Cognito profile, key = Cognito `sub`) and the runner's `schema_migrations`;
+columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single home). Week 4 adds `users.embedding`
+([Q-15](RISKS.md#q-15)).
 
 ---
 
 ## 8. Security
 
-- **IAM least privilege, one role per function:** VPC access + `secretsmanager:GetSecretValue` on the DB secret;
-  Bedrock permissions only for the function that calls Bedrock, on exact ARNs.
+- **IAM least privilege, one role per function:** VPC access + database access per ADR-006 (`rds-db:connect` on the
+  proxy `dbuser` ARN; no `secretsmanager:GetSecretValue` in function roles); `events:PutEvents` only for
+  the trigger, on the bus ARN; Bedrock permissions only for the function that calls Bedrock, on exact ARNs.
 - **Secrets** only in Secrets Manager; never in code, plain env vars, logs or Git.
 - **Transport:** HTTPS everywhere; Lambda → Proxy TLS; Proxy → RDS TLS.
 - **Authentication** at the edge (API Gateway); Lambda trusts claims only from `requestContext`, never from headers.
   Role-based authorisation in the handler.
 - **Input:** every field validated in the handler against its spec; parameterised SQL only.
 - **CORS** explicit origin list. **Logs** contain no tokens, passwords or PII beyond `sub`.
-- Optional (stretch): AWS WAF, Cognito threat protection, IAM auth to RDS Proxy.
+- Optional (stretch): AWS WAF, Cognito threat protection, per-function DB roles (R-16).
 
 ---
 
@@ -264,7 +272,7 @@ Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in
 |---|---|
 | Latency | `/api/admin/*` p95 < 300 ms warm; search results < 1 s (Week 5) |
 | Timeouts | API Gateway integration 29 s, chatbot Lambda 30 s (Week 5); other functions as built |
-| Lambda | Python 3.13, zip; memory and architecture as built (§4), tuned by measurement |
+| Lambda | Python 3.12, zip; memory and architecture as built (§4), tuned by measurement |
 | Cost | learning budget; figures in each design doc's Cost section (Week 1: [backend-foundation](design/backend-foundation.md)); stop or remove idle resources ([R-06](RISKS.md#2-risk-register)) |
 
 ---
@@ -278,16 +286,18 @@ Week 4 adds `users.embedding`. Columns, constraints and indexes are specified in
 | ADR-003 | API type | **Accepted** (2026-11-12) | HTTP API + JWT authorizer (payload v2) |
 | ADR-004 | Token sent to the API | **Accepted** (2026-11-12) | Access token, not ID token |
 | ADR-005 | Network | **Superseded** by the Week 1 build | (was: isolated subnets only); layout as built, §4 |
-| ADR-006 | Database access | **Proposed** | RDS Proxy + Secrets Manager secret, TLS; IAM auth later |
+| ADR-006 | Database access | **Accepted** (2026-11-13, revised; [Q-18](RISKS.md#q-18) A) | RDS Proxy, TLS; functions authenticate with IAM auth tokens (no secret in functions) |
 | ADR-007 | Vectors | **Proposed**, challenged by [Q-15](RISKS.md#q-15) | Titan v2, 1024 dims, cosine; HNSW primary, IVFFlat for comparison |
-| ADR-008 | Migrations | **Superseded** by [Q-16](RISKS.md#q-16) | (was: Flyway in a Java `migrate` function) |
+| ADR-008 | Migrations | **Superseded** by ADR-017 (2026-11-13) | (was: Flyway in a Java `migrate` function) |
 | ADR-009 | Region | **Decided by the Week 1 build** | `eu-west-1` (Ireland), single region (§4) |
 | ADR-010 | LLM chatbot | **Superseded** by the curriculum (Week 5) | (was: semantic search only, Agent as stretch); Bedrock Agent designed in Week 5 |
-| ADR-011 | User synchronisation | **Rejected** (2026-11-12) | (was: PostConfirmation trigger without EventBridge); the curriculum requires EventBridge, wiring decided in Week 3 |
+| ADR-011 | User synchronisation | **Rejected** (2026-11-12) | (was: PostConfirmation trigger without EventBridge); the curriculum requires EventBridge, wiring per ADR-016 |
 | ADR-012 | Log format | **Proposed** | Powertools Logger + Lambda advanced logging controls (JSON), confirmed in Week 6 |
 | ADR-013 | User profile store | **Accepted** (2026-11-12) | Week 2: Cognito attributes are the only store, the personal page reads them in the SPA; Week 3 adds the PostgreSQL copy |
 | ADR-014 | SPA auth UI | **Accepted** (2026-11-12) | Own screens on `aws-amplify/auth` APIs; `@aws-amplify/ui-react` removed |
-| ADR-015 | Server code | **Accepted** (2026-11-12) | Python 3.13 Lambda functions, zip deploys, no backend application |
+| ADR-015 | Server code | **Accepted** (2026-11-12; revised 2026-11-16, owner) | Python 3.12 Lambda functions `admin`, `chatbot`, `sync` + trigger `post-confirmation`, zip deploys, no backend application |
+| ADR-016 | User sync wiring | **Accepted** (2026-11-13, [Q-17](RISKS.md#q-17) A) | PostConfirmation trigger (outside the VPC) → `PutEvents` → custom bus → rule → Sync Lambda |
+| ADR-017 | Migrations | **Accepted** (2026-11-13, [Q-16](RISKS.md#q-16) A; revised 2026-11-16, owner) | Versioned SQL files applied by a Python runner module inside `aws-challenge-sync`, on the owner's direct invoke |
 
 **ADR-001 — IaC (Deferred).** Week 1 was built in the console and Week 2 is built by the owner from console runbooks
 (Q-12 C; agents have no AWS access, so IaC code will be deployed by the owner too). A dedicated task (T00-03) codifies the existing resources once the tool is chosen in
@@ -304,9 +314,42 @@ pass the authorizer**; the handler therefore rejects `token_use ≠ access` with
 claims available to the API, but the API accepts a token meant for the client and couples to the attribute schema.
 *Consequence:* the draft `frontend/src/api/client.ts` sends the ID token — fixed by T02-05.
 
-**ADR-006 — Database access (Proposed).** Lambda reads the secret from Secrets Manager on first use (cached per
-execution environment) and connects to the proxy over TLS. Later: IAM authentication to the proxy removes the
-password from Lambda.
+**ADR-006 — Database access (Accepted 2026-11-13, owner, in the revised form).** *Original (Proposed, not built):*
+Lambda reads the secret from Secrets Manager on first use and connects to the proxy over TLS; IAM authentication
+later. *Revision (Q-18 A):* the
+private subnets have no egress (R-09), so a Secrets Manager call needs an interface endpoint (≈ $8/AZ-month) or a NAT
+(≈ $39/month). Instead each function generates an RDS IAM auth token locally (SigV4, no network call) and connects
+to the proxy with TLS; the proxy requires IAM authentication and keeps its own secret towards RDS; roles get
+`rds-db:connect` on the proxy `dbuser` ARN. *Alternatives:* Secrets Manager interface endpoint; NAT gateway.
+*Consequences:* no secret in any function, $0; all functions share the proxy's DB user (R-16, accepted by the owner);
+password logins to the proxy stop (the Week 1 probe is replaced). Detail: [design/user-sync](design/user-sync.md) §1.
+
+**ADR-016 — User sync wiring (Accepted 2026-11-13, owner; Q-17 A).** *Context:* the curriculum requires Cognito → EventBridge
+→ Lambda; Cognito publishes no "user confirmed" event to EventBridge; the owner confirms users in the console
+(`AdminConfirmSignUp`, which invokes the PostConfirmation trigger per the Cognito docs). *Decision:* a minimal
+function `aws-challenge-post-confirmation` outside the VPC is the PostConfirmation trigger and puts one
+`UserConfirmed` event with the allow-listed attributes on the custom bus `aws-challenge-events`; rule
+`aws-challenge-user-confirmed` invokes `aws-challenge-sync` (VPC), which upserts the row. The trigger never fails the
+confirmation; gaps are closed by a re-sync runbook (R-11). *Alternatives:* CloudTrail trail + default-bus rule +
+`AdminGetUser` (trail required, delayed, Sync needs Cognito egress); trigger → SQS → Pipes. *Consequences:* a fourth
+function besides the curriculum's three (amends ADR-015's list; kept by the owner 2026-11-16 as the free and instant
+option over CloudTrail + NAT/endpoint); personal data in the event (no archive); no egress needed. Detail:
+[design/user-sync](design/user-sync.md) §3.
+
+**ADR-017 — Migrations (Accepted 2026-11-13, owner; Q-16 A; replaces ADR-008; revised 2026-11-16, owner).**
+Versioned SQL files `lambdas/sync/migrations/V<n>__<description>.sql` applied by a small Python runner module of the
+VPC function `aws-challenge-sync`; the sync handler dispatches on the event: an EventBridge `UserConfirmed` event →
+upsert (spec 07), a direct invoke `{"action":"status"|"migrate"}` from the console Test tab (owner) → the runner,
+anything else → `UNSUPPORTED_EVENT`. Runner rules unchanged: `schema_migrations` with checksums, one transaction per
+file, advisory lock, fix-forward. *Revision 2026-11-16:* the original decision placed the runner in a separate
+function `aws-challenge-migrate`; the owner wants only the curriculum's functions (plus the ADR-016 trigger), so the
+runner moved into `sync` before `migrate` was ever created. *Alternatives:* separate `aws-challenge-migrate` (original
+form: one more function, role and log group; rejected by the owner 2026-11-16); the runner inside `admin` (DDL path in
+the API-facing function); Flyway from CloudShell (no egress); Alembic. *Consequences:* the sync timeout rises to 60 s
+(migration socket timeout 55 s); every sync zip ships the migration files, but a file is applied only by an explicit
+`migrate` invoke; EventBridge cannot start a migration (the rule pattern matches only `UserConfirmed`, and an
+EventBridge envelope never carries a top-level `action` key); DDL rights were already shared through the one proxy DB
+user (R-16). Detail: [design/user-sync](design/user-sync.md) §2, [spec 06](specs/06-users-table-and-migrations.md).
 
 **ADR-007 — Vectors (Proposed).** 1024 is Titan v2's maximum; HNSW needs no training step; IVFFlat needs data before
 building and is kept for the comparison. Challenged by the Week 4 curriculum (1536 dimensions, `<->` operator) —
@@ -319,8 +362,8 @@ Until Week 6 handlers print one JSON line per invocation with the standard libra
 **ADR-013 — User profile store (Accepted 2026-11-12, owner).** Week 2: registration data lives only in Cognito
 (standard + custom attributes); the personal page reads it in the SPA with `fetchUserAttributes`; `GET /api/me`
 returns the caller's token claims and proves the protected API, not the profile. Week 3 copies users into
-PostgreSQL through the EventBridge sync chain (curriculum); whether the personal page then switches to the database
-copy is decided in Week 3. *Amended 2026-11-13 (owner):* `GET /api/me` moved to Week 3; in Week 2 the SPA calls no
+PostgreSQL through the EventBridge sync chain (curriculum); the personal page does not switch to the database copy
+([Q-19](RISKS.md#q-19) A, owner 2026-11-13). *Amended 2026-11-13 (owner):* `GET /api/me` moved to Week 3; in Week 2 the SPA calls no
 API. *Alternatives considered:* `app_user` read model behind `GET /api/me` already in Week 2
 (moved to Week 3 by the curriculum); PostgreSQL only with Cognito for credentials (duplicates Cognito sign-up).
 *Consequence:* the user can change own attributes through `UpdateUserAttributes` ([R-12](RISKS.md#2-risk-register)).
@@ -330,17 +373,22 @@ and numeric ranges. Own sign-up, confirm and sign-in screens call `signUp`, `con
 `signIn`, `signOut`, `fetchAuthSession`, `fetchUserAttributes` from `aws-amplify/auth`; `@aws-amplify/ui-react` is
 removed. *Alternatives:* Authenticator without its stylesheet; Authenticator with styles and a raised budget.
 
-**ADR-015 — Lambda functions in Python, no backend application (Accepted 2026-11-12, owner; supersedes ADR-002).**
-*Context:* the three Week 1 functions were created manually and run on Python; the Spring Boot draft never compiled
-and was deleted. *Decision:* all server-side code is the Lambda functions `admin`, `chatbot`, `sync` (further
-functions only by a later decision, e.g. Q-16), written in Python 3.13, deployed as zip files from the repository.
+**ADR-015 — Lambda functions in Python, no backend application (Accepted 2026-11-12, owner; supersedes ADR-002;
+revised 2026-11-16, owner).**
+*Context:* the three Week 1 functions were created manually and run on Python 3.12; the Spring Boot draft never
+compiled and was deleted. *Decision:* all server-side code is the Lambda functions `admin`, `chatbot`, `sync` (further
+functions only by a later decision — ADR-016 adds `post-confirmation`; no other function, owner 2026-11-16), written
+for the **Python 3.12** runtime, deployed as zip files from the repository. *Revision 2026-11-16:* the runtime was
+3.13 in the original decision; the owner keeps 3.12, the runtime of the existing functions, so no runtime switch is
+part of any deploy. Local tests and packaging run on Python 3.13 (the owner's `py` launcher has 3.13 and 3.8 only);
+code must stay 3.12-compatible (no 3.13-only API) and every pinned package must support 3.12 (python-lambda skill).
 *Library proposal (the owner may adjust; fixed per function in `requirements.txt` by the task that adds it):*
 `boto3` from the Lambda runtime; `pg8000` (pure-Python PostgreSQL driver, no native build, so a zip built on Windows
 runs on Lambda); Powertools for AWS Lambda (Python) Logger from Week 6 (ADR-012); `pytest` for tests; no linter (owner, 2026-11-12). *Alternatives:* Spring Boot in Lambda (ADR-002: 4–8 s cold start, SnapStart, never
 compiled); plain Java 21 handlers (rewrite of working code, JVM cold start against the 5 s Cognito trigger limit);
 Node.js/TypeScript (same language as the SPA, but the existing code is Python). *Consequences:* no Gradle, Spring or
 Java tests for server code; `psycopg` binary wheels are avoided (they need a Linux build); database integration
-tests and migrations are decided with the first schema ([Q-16](RISKS.md#q-16)).
+tests and migrations are decided with the first schema (ADR-017).
 
 ---
 
@@ -350,9 +398,9 @@ tests and migrations are decided with the first schema ([Q-16](RISKS.md#q-16)).
 |---|---|---|---|
 | G1 | Amplify Hosting, `amplify.yml` | Week 1 — [spec 01](specs/01-spa-delivery.md) | push to `main` → new SPA version live without manual steps |
 | G2 | CloudFront (Amplify), VPC | Week 1 — [spec 01](specs/01-spa-delivery.md), [spec 02](specs/02-database-connectivity.md) | SPA served by CloudFront (`x-cache`, `via`); backend has no public IPs |
-| G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL | sign-up → owner confirms → sign-in → tokens in SPA → personal page |
-| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — endpoints, `admin` group | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: access token → 200, non-admin on `/api/admin` → 403 |
-| G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md); Week 3 — Admin Lambda data | Lambda connects only to the proxy endpoint |
+| G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL ([spec 07](specs/07-user-sync.md)) | sign-up → owner confirms → sign-in → tokens in SPA → personal page; Week 3: confirmed user → row in `users` |
+| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — [spec 08](specs/08-admin-api.md), [spec 09](specs/09-admin-page-and-role.md) | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: access token → 200, non-admin on `/api/admin` → 403 |
+| G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md); Week 3 — [spec 06](specs/06-users-table-and-migrations.md), [spec 08](specs/08-admin-api.md) | Lambda connects only to the proxy endpoint (Week 3: IAM auth, no secret in the function) |
 | G6 | pgvector, HNSW / IVFFlat | Week 4 | similarity query uses the index; latency on 1000 records recorded |
 | G7 | Bedrock embeddings | Week 4 ([Q-15](RISKS.md#q-15)) | embedding computed by the Sync Lambda on insert/update |
-| G8 | CloudWatch, JSON logs, X-Ray | Week 1 (log groups); Week 3 (API access log, handler log lines — moved from Week 2); Week 6 | one request traced by `apiRequestId` through API GW → Lambda → DB/Bedrock |
+| G8 | CloudWatch, JSON logs, X-Ray | Week 1 (log groups); Week 3 (API access log, handler log lines — [spec 07](specs/07-user-sync.md), [spec 08](specs/08-admin-api.md)); Week 6 | one request traced by `apiRequestId` through API GW → Lambda → DB/Bedrock |

@@ -39,3 +39,8 @@ out/
 ### Frontend ###
 node_modules/
 frontend/dist/
+
+### Python ###
+.venv/
+__pycache__/
+.pytest_cache/
