@@ -244,6 +244,48 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+/* ---- admin users table ---- */
+
+.card-full {
+  max-width: none;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-sm);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.data-table[aria-busy='true'] {
+  opacity: 0.5;
+}
+
+.paging {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
 .badge {
   display: inline-block;
   margin: var(--space-4) 0 0;

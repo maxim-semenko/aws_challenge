@@ -3,8 +3,8 @@ import { Navigate, useLocation } from 'react-router'
 import { redirectTarget, useSession } from './session'
 
 /**
- * Signed-in routes: anonymous visitors go to /sign-in and come back after sign-in. No route uses it since the
- * profile moved to Home (owner decision 2026-11-13); kept for the signed-in pages of later weeks.
+ * Signed-in routes: anonymous visitors go to /sign-in and come back after sign-in. Used by /admin when the API is
+ * configured (spec 09); needs auth configured, otherwise the disabled session query stays pending.
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const session = useSession()

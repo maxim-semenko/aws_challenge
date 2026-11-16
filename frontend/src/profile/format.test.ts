@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MISSING, formatBirthdate, formatCountry, formatMeasure, formatText, roleLine } from './format'
+import { MISSING, formatBirthdate, formatCountry, formatMeasure, formatText, roleLine, selectRoleLine } from './format'
 
 describe('personal page display rules (spec 04 §Outputs, §Edge Cases)', () => {
   it('shows the birth date as DD/MM/YYYY, "—" when missing or unparseable', () => {
@@ -24,5 +24,16 @@ describe('personal page display rules (spec 04 §Outputs, §Edge Cases)', () => 
     expect(roleLine(['admin'])).toBe('Role: administrator')
     expect(roleLine([])).toBe('Role: user')
     expect(roleLine(undefined)).toBe('Role: unavailable')
+  })
+
+  it('role line from the /api/me query state (spec 09 §Outputs)', () => {
+    expect(selectRoleLine('success', ['admin'])).toBe('Role: administrator')
+    expect(selectRoleLine('success', ['user', 'admin'])).toBe('Role: administrator')
+    expect(selectRoleLine('success', [])).toBe('Role: user')
+    expect(selectRoleLine('pending', undefined)).toBeNull()
+    expect(selectRoleLine('error', undefined, 500)).toBe('Role: unavailable')
+    expect(selectRoleLine('error', undefined, 502)).toBe('Role: unavailable')
+    expect(selectRoleLine('error', undefined)).toBe('Role: unavailable') // network error: no status
+    expect(selectRoleLine('error', undefined, 401)).toBeNull() // signing out
   })
 })

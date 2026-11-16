@@ -14,6 +14,12 @@ export const env = {
 
 export const isAuthConfigured = Boolean(env.region && env.userPoolId && env.userPoolClientId)
 
+/**
+ * The SPA calls the API only when VITE_API_URL is set; every route needs a Cognito access token, so auth must be
+ * configured too. Otherwise no API request is made at all (AC-04.10, spec 09 Behaviour 4).
+ */
+export const isApiConfigured = Boolean(env.apiUrl) && isAuthConfigured
+
 /** Configures Amplify Auth once at start-up; a no-op without configuration. Sign-in uses the default USER_SRP_AUTH. */
 export function configureAmplify(): void {
   if (!isAuthConfigured) {

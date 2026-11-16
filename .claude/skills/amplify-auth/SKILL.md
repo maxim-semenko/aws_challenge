@@ -49,9 +49,10 @@ used and there is no `/confirm` route. The owner confirms new users in the Cogni
 
 `/sign-up` and `/sign-in` are wrapped in `AnonymousOnly` (signed-in users go to the requested page or `/`). Home `/` is
 public and switches on `useSession`: profile when signed in, intro with sign-in / sign-up links otherwise. `/me` and
-`/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat and Admin only to a signed-in
-user. `RequireAuth` (anonymous → `/sign-in` with `state.from`, back to `from` after sign-in; only same-origin paths
-starting with a single `/` are accepted, `redirectTarget`) is currently unused and kept for later signed-in pages.
+`/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat only to a signed-in user and
+Admin only when `/api/me` `groups` contain `admin` (spec 09, T03-08; see `spa-api-client`). `RequireAuth` (anonymous →
+`/sign-in` with `state.from`, back to `from` after sign-in; only same-origin paths starting with a single `/` are
+accepted, `redirectTarget`) wraps `/admin` when the API is configured (`isApiConfigured`).
 
 ## Validation and errors
 

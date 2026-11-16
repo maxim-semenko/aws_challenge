@@ -1,7 +1,8 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router'
-import { AnonymousOnly } from './auth/guards'
+import { useMe, useSignOutOnUnauthorized } from './api/queries'
+import { AnonymousOnly, RequireAuth } from './auth/guards'
 import { useAuthEvents, useSession, useSignOut } from './auth/session'
-import { isAuthConfigured } from './config/amplify'
+import { isApiConfigured, isAuthConfigured } from './config/amplify'
 import { AdminPage } from './pages/AdminPage'
 import { ChatPage } from './pages/ChatPage'
 import { HomePage } from './pages/HomePage'
@@ -10,14 +11,18 @@ import { SignUpPage } from './pages/SignUpPage'
 import './App.css'
 
 /**
- * Header: Chat and Admin links only for a signed-in user; auth links only when Cognito is configured (AC-04.10).
- * Without configuration the session query is disabled, so everybody is anonymous.
+ * Header: Chat only for a signed-in user, Admin only when GET /api/me groups contain `admin` (spec 09, display only);
+ * auth links only when Cognito is configured (AC-04.10). Without configuration the session query is disabled, so
+ * everybody is anonymous; without VITE_API_URL /api/me is never requested.
  */
 function Header() {
   const session = useSession()
   const signOut = useSignOut()
+  const me = useMe()
+  useSignOutOnUnauthorized(me.error)
   useAuthEvents()
   const signedIn = Boolean(session.data)
+  const isAdmin = me.data?.groups.includes('admin') ?? false
 
   return (
     <header className="app-header">
@@ -29,7 +34,7 @@ function Header() {
           {signedIn && (
             <>
               <NavLink to="/chat">Chat</NavLink>
-              <NavLink to="/admin">Admin</NavLink>
+              {isAdmin && <NavLink to="/admin">Admin</NavLink>}
             </>
           )}
         </nav>
@@ -63,7 +68,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<ChatPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route
+            path="/admin"
+            element={isApiConfigured ? <RequireAuth><AdminPage /></RequireAuth> : <AdminPage />}
+          />
           {isAuthConfigured && (
             <>
               <Route path="/sign-up" element={<AnonymousOnly><SignUpPage /></AnonymousOnly>} />

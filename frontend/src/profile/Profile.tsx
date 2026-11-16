@@ -1,8 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchUserAttributes } from 'aws-amplify/auth'
-import { formatBirthdate, formatCountry, formatMeasure, formatText } from './format'
+import { ApiError } from '../api/client'
+import { useMe } from '../api/queries'
+import { isApiConfigured } from '../config/amplify'
+import { formatBirthdate, formatCountry, formatMeasure, formatText, selectRoleLine } from './format'
 
 export const userAttributesQueryKey = ['user-attributes'] as const
+
+/** Role line from GET /api/me (spec 09); mounted only when the API is configured, so no request otherwise. */
+function RoleLine() {
+  const me = useMe()
+  const errorStatus = me.error instanceof ApiError ? me.error.status : undefined
+  const line = selectRoleLine(me.status, me.data?.groups, errorStatus)
+  return line ? <p className="badge">{line}</p> : null
+}
 
 /** Read-only profile of the signed-in user from Cognito attributes, shown on Home `/` (ADR-013, spec 04 §Outputs). */
 export function Profile() {
@@ -52,6 +63,7 @@ export function Profile() {
           </div>
         ))}
       </dl>
+      {isApiConfigured && <RoleLine />}
     </section>
   )
 }

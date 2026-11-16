@@ -41,3 +41,17 @@ export function roleLine(groups: readonly string[] | undefined): RoleLine {
   if (!groups) return 'Role: unavailable'
   return groups.includes('admin') ? 'Role: administrator' : 'Role: user'
 }
+
+/**
+ * Role line for the state of the /api/me query (spec 09 §Outputs): nothing while loading or while a 401 signs the user
+ * out; "Role: unavailable" on any other error (5xx, network). Not rendered at all without VITE_API_URL (caller).
+ */
+export function selectRoleLine(
+  status: 'pending' | 'error' | 'success',
+  groups: readonly string[] | undefined,
+  errorStatus?: number,
+): RoleLine | null {
+  if (status === 'pending') return null
+  if (status === 'error') return errorStatus === 401 ? null : 'Role: unavailable'
+  return roleLine(groups)
+}
