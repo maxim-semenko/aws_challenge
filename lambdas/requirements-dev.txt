@@ -1,0 +1,4 @@
+# Local development and tests only — never packaged. boto3 here only so tests can import it; the deployed function
+# uses the boto3 of the Lambda Python 3.12 runtime. Function runtime pins live in lambdas/<function>/requirements.txt.
+pytest==9.2.0
+boto3==1.44.3

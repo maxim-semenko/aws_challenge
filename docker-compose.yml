@@ -1,8 +1,10 @@
-# Local PostgreSQL with pgvector (same major version family as RDS)
+# Local PostgreSQL 14 with pgvector — same major as RDS (R-14); used by the optional migration integration test
+# (python-lambda skill). Image tag re-checked on Docker Hub 2026-11-16 (T03-02).
 #   docker compose up -d
+# The volume is pgdata14: data directories of another major (the former pg17 volume `pgdata`) cannot be opened by 14.
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.7-pg14
     environment:
       POSTGRES_DB: aws_challenge
       POSTGRES_USER: app
@@ -10,11 +12,11 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata14:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d aws_challenge"]
       interval: 5s
       retries: 10
 
 volumes:
-  pgdata:
+  pgdata14:
