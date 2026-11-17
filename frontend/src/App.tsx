@@ -1,7 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router'
-import { useMe, useSignOutOnUnauthorized } from './api/queries'
 import { AnonymousOnly, RequireAuth } from './auth/guards'
-import { useAuthEvents, useSession, useSignOut } from './auth/session'
+import { useAuthEvents, useGroups, useSession, useSignOut } from './auth/session'
 import { isApiConfigured, isAuthConfigured } from './config/amplify'
 import { AdminPage } from './pages/AdminPage'
 import { ChatPage } from './pages/ChatPage'
@@ -11,18 +10,17 @@ import { SignUpPage } from './pages/SignUpPage'
 import './App.css'
 
 /**
- * Header: Chat only for a signed-in user, Admin only when GET /api/me groups contain `admin` (spec 09, display only);
- * auth links only when Cognito is configured (AC-04.10). Without configuration the session query is disabled, so
- * everybody is anonymous; without VITE_API_URL /api/me is never requested.
+ * Header: Chat only for a signed-in user, Admin only when the access token `cognito:groups` claim contains `admin`
+ * (spec 09, display only, no API call); auth links only when Cognito is configured (AC-04.10). Without configuration
+ * the session query is disabled, so everybody is anonymous.
  */
 function Header() {
   const session = useSession()
   const signOut = useSignOut()
-  const me = useMe()
-  useSignOutOnUnauthorized(me.error)
+  const groups = useGroups()
   useAuthEvents()
   const signedIn = Boolean(session.data)
-  const isAdmin = me.data?.groups.includes('admin') ?? false
+  const isAdmin = groups.data?.includes('admin') ?? false
 
   return (
     <header className="app-header">

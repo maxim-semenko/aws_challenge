@@ -88,3 +88,18 @@ W3-G4, S6: the administrator sees all users in a read-only table; every user see
   skill; no token logging. Re-run by ARCH: `npm test` 69 passed, `npm run build` green. AC-09.3 … AC-09.5 remain
   **not verified** until T03-07 is deployed (CORS origins incl. `http://localhost:5173` and routes come from T03-07;
   ENVIRONMENT.md still shows the Week 2 routes/CORS). No findings.
+- 2026-11-17 **owner decision:** the HTTP API follows the curriculum diagram strictly — only `GET /admin` (users list
+  for admins) and `POST /chat` (Week 5); no `/api/me`, no `/api/admin/users`. Frontend changed accordingly (status
+  stays `Review`):
+  - Role line and Admin nav link from the access token claim `cognito:groups` via `fetchAuthSession()` — no API call
+    (`auth/session.ts` `useGroups`, key `['groups', userId]`, dropped by sign-out; pure `groupsFromClaims` in
+    `profile/format.ts`). "Role: administrator" if it contains `admin`, else "Role: user"; "Role: unavailable" only
+    if the session cannot be read. The role line is now shown whenever the profile is shown (no `VITE_API_URL`
+    needed).
+  - Admin page calls `GET /admin?page=<p>&size=20` (`adminUsersPath`); response shape, 401/403/retry rules and the
+    "no request without `VITE_API_URL`" behaviour unchanged. Removed `endpoints.me`, `MeResponse`, `meQueryKey`
+    (`['me']`), `useMe`.
+  - Skills `spa-api-client` and `amplify-auth` updated. The "Interfaces that must match" line above (`['me']`) and
+    the `/api` prefix rule of CLAUDE.md §6 are superseded by this decision (docs owned by other agents).
+  - `npm test` 7 files / 70 tests green; `npm run build` green. `npm run preview` not re-run (AC-09.2 path unchanged:
+    `AdminPage` still renders `ComingLater` without `VITE_API_URL`) — **not verified** after this change.

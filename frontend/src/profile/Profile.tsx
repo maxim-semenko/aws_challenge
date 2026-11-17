@@ -1,17 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchUserAttributes } from 'aws-amplify/auth'
-import { ApiError } from '../api/client'
-import { useMe } from '../api/queries'
-import { isApiConfigured } from '../config/amplify'
+import { useGroups } from '../auth/session'
 import { formatBirthdate, formatCountry, formatMeasure, formatText, selectRoleLine } from './format'
 
 export const userAttributesQueryKey = ['user-attributes'] as const
 
-/** Role line from GET /api/me (spec 09); mounted only when the API is configured, so no request otherwise. */
+/** Role line from the access token `cognito:groups` claim (spec 09, owner decision 2026-11-17; no API call). */
 function RoleLine() {
-  const me = useMe()
-  const errorStatus = me.error instanceof ApiError ? me.error.status : undefined
-  const line = selectRoleLine(me.status, me.data?.groups, errorStatus)
+  const groups = useGroups()
+  const line = selectRoleLine(groups.status, groups.data)
   return line ? <p className="badge">{line}</p> : null
 }
 
@@ -63,7 +60,7 @@ export function Profile() {
           </div>
         ))}
       </dl>
-      {isApiConfigured && <RoleLine />}
+      <RoleLine />
     </section>
   )
 }

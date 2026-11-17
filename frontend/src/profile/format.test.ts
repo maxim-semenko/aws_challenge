@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { MISSING, formatBirthdate, formatCountry, formatMeasure, formatText, roleLine, selectRoleLine } from './format'
+import {
+  MISSING,
+  formatBirthdate,
+  formatCountry,
+  formatMeasure,
+  formatText,
+  groupsFromClaims,
+  roleLine,
+  selectRoleLine,
+} from './format'
 
 describe('personal page display rules (spec 04 §Outputs, §Edge Cases)', () => {
   it('shows the birth date as DD/MM/YYYY, "—" when missing or unparseable', () => {
@@ -26,14 +35,18 @@ describe('personal page display rules (spec 04 §Outputs, §Edge Cases)', () => 
     expect(roleLine(undefined)).toBe('Role: unavailable')
   })
 
-  it('role line from the /api/me query state (spec 09 §Outputs)', () => {
+  it('groups from the access token cognito:groups claim', () => {
+    expect(groupsFromClaims({ 'cognito:groups': ['admin'] })).toEqual(['admin'])
+    expect(groupsFromClaims({ sub: 'x' })).toEqual([]) // no group: claim absent
+    expect(groupsFromClaims({ 'cognito:groups': 'admin' })).toEqual([]) // malformed
+    expect(groupsFromClaims(undefined)).toEqual([])
+  })
+
+  it('role line from the groups query state (spec 09 §Outputs)', () => {
     expect(selectRoleLine('success', ['admin'])).toBe('Role: administrator')
     expect(selectRoleLine('success', ['user', 'admin'])).toBe('Role: administrator')
     expect(selectRoleLine('success', [])).toBe('Role: user')
     expect(selectRoleLine('pending', undefined)).toBeNull()
-    expect(selectRoleLine('error', undefined, 500)).toBe('Role: unavailable')
-    expect(selectRoleLine('error', undefined, 502)).toBe('Role: unavailable')
-    expect(selectRoleLine('error', undefined)).toBe('Role: unavailable') // network error: no status
-    expect(selectRoleLine('error', undefined, 401)).toBeNull() // signing out
+    expect(selectRoleLine('error', undefined)).toBe('Role: unavailable') // session could not be read
   })
 })

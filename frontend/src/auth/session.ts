@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getCurrentUser, signOut } from 'aws-amplify/auth'
+import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
 import { useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { isAuthConfigured } from '../config/amplify'
+import { groupsFromClaims } from '../profile/format'
 
 export const sessionQueryKey = ['auth', 'session'] as const
 
@@ -28,6 +29,31 @@ export function useSession() {
     queryKey: sessionQueryKey,
     queryFn: loadSession,
     enabled: isAuthConfigured,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+/** Key of the token groups; first element is not 'auth', so useSignOut drops it; the user id separates sessions. */
+export const groupsQueryKey = (userId: string | undefined) => ['groups', userId] as const
+
+async function loadGroups(): Promise<string[]> {
+  const { tokens } = await fetchAuthSession()
+  if (!tokens?.accessToken) throw new Error('No access token in the session')
+  return groupsFromClaims(tokens.accessToken.payload)
+}
+
+/**
+ * Cognito groups of the signed-in user from the access token claim `cognito:groups` (no API call, owner decision
+ * 2026-11-17). Display only — the API enforces the group. Enabled only with a session; read once per session.
+ */
+export function useGroups() {
+  const session = useSession()
+  const userId = session.data?.userId
+  return useQuery({
+    queryKey: groupsQueryKey(userId),
+    queryFn: loadGroups,
+    enabled: Boolean(userId),
     staleTime: Infinity,
     retry: false,
   })

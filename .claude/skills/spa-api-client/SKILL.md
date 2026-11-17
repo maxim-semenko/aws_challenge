@@ -4,11 +4,11 @@ description: How the SPA in frontend/ calls the protected HTTP API — base URL 
 license: MIT
 metadata:
   domain: frontend
-  triggers: API client, fetch, VITE_API_URL, Authorization, Bearer, access token, /api/me, /api/admin/users, TanStack Query, queryKey, 403, paging
+  triggers: API client, fetch, VITE_API_URL, Authorization, Bearer, access token, GET /admin, POST /chat, TanStack Query, queryKey, 403, paging
   role: specialist
   scope: implementation
   related-skills: react-expert, amplify-auth
-  source: project (created by T02-05; endpoints, query keys and 403 handling updated by T03-08)
+  source: project (created by T02-05; endpoints, query keys and 403 handling updated by T03-08; /api/me removed, path GET /admin per owner decision 2026-11-17)
   used-by: [frontend]
 ---
 
@@ -17,13 +17,17 @@ metadata:
 Conventions: CLAUDE.md §6. Endpoint fields: [spec 08](../../../docs/specs/08-admin-api.md) §Outputs (single home);
 UI states and texts: [spec 09](../../../docs/specs/09-admin-page-and-role.md).
 
+**Owner decision 2026-11-17:** the HTTP API follows the curriculum diagram — only `GET /admin` (users list for
+admins) and, in Week 5, `POST /chat`. There is no `/api/me` and no `/api/admin/users`; the user's role comes from
+the access token (`amplify-auth` skill, `useGroups`), not from the API.
+
 ## Client (`frontend/src/api/client.ts`)
 
 - Base URL: `env.apiUrl` from `VITE_API_URL` (trailing `/` removed, no default). No local backend (ADR-015).
 - `isApiConfigured` (`config/amplify.ts`) = `VITE_API_URL` set **and** auth configured (every route needs a token).
-  Without it the SPA makes **no** API request: the components that call the API are not mounted (`Profile` role
-  line, `AdminPage` shows the `ComingLater` placeholder) and `useMe` is disabled (AC-04.10). `/chat` stays a
-  placeholder without request until Week 5.
+  Without it the SPA makes **no** API request: `AdminPage` shows the `ComingLater` placeholder and does not mount
+  the users query; `useAdminUsers` is disabled as well (AC-04.10). `/chat` stays a placeholder without request until
+  Week 5.
 - Token: `fetchAuthSession()` → `tokens.accessToken` → `Authorization: Bearer <access token>` (ADR-004; the handler
   rejects the ID token). Amplify refreshes expired tokens inside `fetchAuthSession()`. Never log the header or token.
 - Errors: non-2xx → `ApiError(status)` (the problem+json body is not parsed; the UI texts come from spec 09).
@@ -35,23 +39,24 @@ UI states and texts: [spec 09](../../../docs/specs/09-admin-page-and-role.md).
 
 | Status | Behaviour |
 |---|---|
-| 401 | `useSignOutOnUnauthorized(error)` (`api/queries.ts`) → `useSignOut()` (cache cleared, `/sign-in`). Called once per query: Header for `['me']`, `AdminPage` for the users list |
+| 401 | `useSignOutOnUnauthorized(error)` (`api/queries.ts`) → `useSignOut()` (cache cleared, `/sign-in`). Called once per query: `AdminPage` for the users list |
 | 403 | page-specific no-access state (`/admin`: "You do not have access to this page."), no table |
-| 5xx / network | unavailable state (role line "Role: unavailable"; `/admin` "Users could not be loaded." + Retry); an error always wins over placeholder data |
+| 5xx / network | `/admin` "Users could not be loaded." + Retry; an error always wins over placeholder data |
 
 ## Endpoints, types and query keys
 
 | Endpoint | Type | Query key | Hook / used by |
 |---|---|---|---|
-| `GET /api/me` | `MeResponse` `{ id, username, groups, expiresAt }` | `meQueryKey` = `['me']` | `useMe()` — enabled with `isApiConfigured` and a session, `staleTime: Infinity` (once per session; dropped by sign-out); Header (Admin link only if `groups` contains `admin`, display only), `Profile` role line |
-| `GET /api/admin/users?page=<p>&size=20` (default sort, no `sort` param) | `Page<User>` `{ items, page, size, total }` | `adminUsersQueryKey(p)` = `['admin','users',p]` | `useAdminUsers(page)` — `placeholderData: keepPreviousData` (previous page visible while the next loads; paging buttons disabled meanwhile); `/admin` |
+| `GET /admin?page=<p>&size=20` (default sort, no `sort` param) | `Page<User>` `{ items, page, size, total }` | `adminUsersQueryKey(p)` = `['admin','users',p]` | `useAdminUsers(page)` — `placeholderData: keepPreviousData` (previous page visible while the next loads; paging buttons disabled meanwhile); `/admin` |
+| `fetchAuthSession` access token claim `cognito:groups` (Cognito, not the API) | `string[]` | `groupsQueryKey(userId)` = `['groups', userId]` | `useGroups()` (`auth/session.ts`) — Header Admin link, `Profile` role line; see `amplify-auth` |
 | `fetchUserAttributes` (Cognito, not the API) | Amplify output | `['user-attributes']` | profile on Home |
 | session (`getCurrentUser`) | `Session \| null` | `['auth','session']` | Home, guards, header |
 
 ## Pure view logic (unit-tested in Node, no DOM)
 
-- `profile/format.ts` `selectRoleLine(status, groups, errorStatus)` — role line per spec 09 (`null` while loading or
-  signing out on 401).
+- `profile/format.ts` `groupsFromClaims(payload)` (claim absent or malformed → `[]`) and
+  `selectRoleLine(status, groups)` — role line per spec 09 (`null` while loading, "Role: unavailable" only when the
+  session cannot be read).
 - `admin/view.ts` — `selectAdminView` (unconfigured / loading / signing-out / forbidden / error / empty / data),
   `paging` (paging line, Previous/Next), `USER_COLUMNS`, `userCells` (dates `DD/MM/YYYY`, `createdAt` by its UTC
   date, country name + code, `null` → "—", odd values as stored).

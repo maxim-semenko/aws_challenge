@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, adminUsersPath, adminUsersQueryKey, isApiError, meQueryKey, retryApi } from './client'
+import { ApiError, adminUsersPath, adminUsersQueryKey, isApiError, retryApi } from './client'
 
 describe('API client (spec 08, spec 09 Behaviour 1-3)', () => {
   it('requests a page of 20 with the default sort', () => {
-    expect(adminUsersPath(0)).toBe('/api/admin/users?page=0&size=20')
-    expect(adminUsersPath(3)).toBe('/api/admin/users?page=3&size=20')
+    expect(adminUsersPath(0)).toBe('/admin?page=0&size=20')
+    expect(adminUsersPath(3)).toBe('/admin?page=3&size=20')
   })
 
   it('uses the query keys of the spec', () => {
-    expect(meQueryKey).toEqual(['me'])
     expect(adminUsersQueryKey(2)).toEqual(['admin', 'users', 2])
   })
 

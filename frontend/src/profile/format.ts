@@ -36,22 +36,24 @@ export function formatMeasure(value: string | undefined, unit: string): string {
 
 export type RoleLine = 'Role: administrator' | 'Role: user' | 'Role: unavailable'
 
-/** Role line from `groups` of GET /api/me; undefined = API not configured or failed. */
+/**
+ * Group names from the `cognito:groups` claim of the access token payload (owner decision 2026-11-17: no API call).
+ * The claim is absent when the user is in no group → []; non-string entries are ignored.
+ */
+export function groupsFromClaims(payload: { readonly [claim: string]: unknown } | undefined): string[] {
+  const claim = payload?.['cognito:groups']
+  return Array.isArray(claim) ? claim.filter((group): group is string => typeof group === 'string') : []
+}
+
+/** Role line from the token groups; undefined = the session could not be read. */
 export function roleLine(groups: readonly string[] | undefined): RoleLine {
   if (!groups) return 'Role: unavailable'
   return groups.includes('admin') ? 'Role: administrator' : 'Role: user'
 }
 
-/**
- * Role line for the state of the /api/me query (spec 09 §Outputs): nothing while loading or while a 401 signs the user
- * out; "Role: unavailable" on any other error (5xx, network). Not rendered at all without VITE_API_URL (caller).
- */
-export function selectRoleLine(
-  status: 'pending' | 'error' | 'success',
-  groups: readonly string[] | undefined,
-  errorStatus?: number,
-): RoleLine | null {
+/** Role line for the state of the groups query: nothing while loading, "Role: unavailable" only if the session failed. */
+export function selectRoleLine(status: 'pending' | 'error' | 'success', groups: readonly string[] | undefined): RoleLine | null {
   if (status === 'pending') return null
-  if (status === 'error') return errorStatus === 401 ? null : 'Role: unavailable'
+  if (status === 'error') return 'Role: unavailable'
   return roleLine(groups)
 }

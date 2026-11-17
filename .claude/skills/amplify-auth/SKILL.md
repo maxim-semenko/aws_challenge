@@ -4,7 +4,7 @@ description: How the SPA in frontend/ uses aws-amplify v6 Auth against the Cogni
 license: MIT
 metadata:
   domain: frontend
-  triggers: Amplify, aws-amplify/auth, Cognito, signUp, signIn, UserNotConfirmedException, sign-in, sign-up, profile, route guard, VITE_USER_POOL_ID, Vitest
+  triggers: Amplify, aws-amplify/auth, Cognito, signUp, signIn, UserNotConfirmedException, sign-in, sign-up, profile, route guard, cognito:groups, role, VITE_USER_POOL_ID, Vitest
   role: specialist
   scope: implementation
   related-skills: react-expert, spa-api-client
@@ -39,6 +39,7 @@ mirrors it. Resource ids: [docs/ENVIRONMENT.md](../../../docs/ENVIRONMENT.md).
 | `signOut` | `auth/session.ts` `useSignOut` | removes all cached queries except the session, then `/sign-in` |
 | `getCurrentUser` | `auth/session.ts` `useSession` | TanStack Query key `['auth','session']`; any error = anonymous (`null`); disabled without auth config |
 | `fetchUserAttributes` | `profile/Profile.tsx`, rendered by `pages/HomePage.tsx` for a signed-in user (T02-05) | key `['user-attributes']` |
+| `fetchAuthSession` | `auth/session.ts` `useGroups`; `api/client.ts` (Bearer header, `spa-api-client`) | groups = access token claim `cognito:groups` via `profile/format.ts` `groupsFromClaims` (absent = no group = `[]`); key `['groups', userId]`, enabled with a session, `staleTime: Infinity`, dropped by sign-out. Error (no token) → "Role: unavailable". Display only — the API enforces the group. A group change shows after the next sign-in (owner decision 2026-11-17, T03-08) |
 | `Hub.listen('auth')` | `auth/session.ts` `useAuthEvents` | `signedIn`, `signedOut`, `tokenRefresh_failure` invalidate the session |
 
 **No code confirmation** (owner decision 2026-11-13): `confirmSignUp`, `resendSignUpCode` and `autoSignIn` are not
@@ -50,7 +51,8 @@ used and there is no `/confirm` route. The owner confirms new users in the Cogni
 `/sign-up` and `/sign-in` are wrapped in `AnonymousOnly` (signed-in users go to the requested page or `/`). Home `/` is
 public and switches on `useSession`: profile when signed in, intro with sign-in / sign-up links otherwise. `/me` and
 `/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat only to a signed-in user and
-Admin only when `/api/me` `groups` contain `admin` (spec 09, T03-08; see `spa-api-client`). `RequireAuth` (anonymous →
+Admin only when the access token `cognito:groups` claim contains `admin` (`useGroups`; spec 09, T03-08). The
+profile card shows "Role: administrator" / "Role: user" from the same claim. `RequireAuth` (anonymous →
 `/sign-in` with `state.from`, back to `from` after sign-in; only same-origin paths starting with a single `/` are
 accepted, `redirectTarget`) wraps `/admin` when the API is configured (`isApiConfigured`).
 

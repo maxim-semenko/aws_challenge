@@ -49,16 +49,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 // ---- API types (field names: spec 08 §Outputs) ----
 
-/** GET /api/me → 200. */
-export interface MeResponse {
-  id: string
-  username: string | null
-  groups: string[]
-  /** ISO-8601 UTC */
-  expiresAt: string
-}
-
-/** One row of GET /api/admin/users. */
+/** One row of GET /admin (owner decision 2026-11-17: the API has only GET /admin and, from Week 5, POST /chat). */
 export interface User {
   id: string
   email: string
@@ -88,14 +79,12 @@ export interface Page<T> {
 export const ADMIN_USERS_PAGE_SIZE = 20
 
 export function adminUsersPath(page: number): string {
-  return `/api/admin/users?page=${page}&size=${ADMIN_USERS_PAGE_SIZE}`
+  return `/admin?page=${page}&size=${ADMIN_USERS_PAGE_SIZE}`
 }
 
-export const meQueryKey = ['me'] as const
 export const adminUsersQueryKey = (page: number) => ['admin', 'users', page] as const
 
-/** Endpoints used by the SPA (spec 08); later endpoints are added with their specs. */
+/** Endpoints used by the SPA; POST /chat is added in Week 5 with its spec. */
 export const endpoints = {
-  me: () => api<MeResponse>('/api/me'),
   adminUsers: (page: number) => api<Page<User>>(adminUsersPath(page)),
 }
