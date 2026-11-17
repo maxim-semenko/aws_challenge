@@ -96,7 +96,20 @@ Source: the owner's console screenshots, 2026-11-13; unauthenticated probes of t
 | Endpoint | `https://o6cpz238i3.execute-api.eu-west-1.amazonaws.com` |
 | Authorizer | `cognito-jwt-authorizer` (id `fvppl3`), JWT; identity source `$request.header.Authorization`; issuer = Issuer above; audience = App client id above |
 | Routes | `GET /admin` (JWT), `POST /chat` (JWT, integration `dyujbqp`); no authorization scopes. Changed from `ANY` on 2026-11-13 because `ANY` caught the CORS preflight (T02-03 Notes) |
-| CORS | origin `https://main.d67fa9mmezz1k.amplifyapp.com`; headers `authorization`, `content-type`; methods `*`; max age 0; credentials no |
+| CORS | origins `https://main.d67fa9mmezz1k.amplifyapp.com` and `http://localhost:5173` (added 2026-11-17, T03-07); headers `authorization`, `content-type`; methods `*`; max age 600; credentials no (verified by unauthenticated preflight probes 2026-11-17) |
+
+## Sync chain (Week 3, T03-05)
+
+Source: the owner's console screenshots, 2026-11-17.
+
+| Item | Value |
+|---|---|
+| Event bus | `aws-challenge-events` — **Classic** bus type (the new "Custom" bus type has no rules; ARN `event-bus/aws-challenge-events`) |
+| Rule | `aws-challenge-user-confirmed`: pattern `{"source":["aws-challenge.cognito"],"detail-type":["UserConfirmed"]}` → `aws-challenge-sync`; max event age 1 h, 5 retries, no DLQ; no tags |
+| Trigger function | `aws-challenge-post-confirmation`: Python 3.12, x86_64, no VPC, 256 MB, 5 s, env `EVENT_BUS_NAME=aws-challenge-events`; role `aws-challenge-post-confirmation-role` (inline `aws-challenge-post-confirmation-policy`: `events:PutEvents` on the bus, own log stream writes); log group retention 2 weeks |
+| Cognito trigger | Post confirmation → `aws-challenge-post-confirmation` (fires on the console "Confirm account" too) |
+| `aws-challenge-sync` | 256 MB, 60 s, env `DB_PROXY_ENDPOINT`/`DB_NAME=postgres`/`DB_USER=postgres`; role adds inline `aws-challenge-sync-rds-connect` (`rds-db:connect` on `prx-019d0caac664f7be9/postgres`); schema V1 applied 2026-11-16 |
+| Back-fill | not done (owner, 2026-11-17): users confirmed before the trigger are not in `users` |
 
 ## Not recorded yet
 

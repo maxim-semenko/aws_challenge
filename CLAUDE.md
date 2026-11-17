@@ -29,7 +29,7 @@ decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (Week 3 planned 2026-11-13; now: Week 3 — REST API + data).
+planned** (Week 3 — REST API + data — closed 2026-11-17; next: Week 4, not planned yet).
 
 ## 3. Working rules (mandatory)
 
@@ -86,8 +86,9 @@ that introduces the design system. Weeks 1 and 2 need no styling.
 The first endpoints come in Week 2. These conventions apply to every endpoint; the endpoint list lives in
 ARCHITECTURE.md §6, field-level detail in the feature design doc (API Design) and the spec (Inputs/Outputs).
 
-- **Style:** REST over HTTPS, JSON (`application/json`, UTF-8), all paths under `/api`, no version segment in the
-  path (breaking changes need an ADR), nouns in plural, no OData, no GraphQL.
+- **Style:** REST over HTTPS, JSON (`application/json`, UTF-8); routes exactly as in the curriculum architecture
+  diagram (`GET /admin`, `POST /chat`; no `/api` prefix — ADR-018), endpoint list in ARCHITECTURE.md §6; a route
+  not in the diagram needs an ADR; no version segment in the path (breaking changes need an ADR), no OData, no GraphQL.
 - **Auth:** `Authorization: Bearer <Cognito token>` — access token (ADR-004, Accepted).
 - **Pagination:** query `page` (0-based, default 0) and `size` (1..100, default 20); response
   `{ "items": [...], "page": n, "size": n, "total": n }`.

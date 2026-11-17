@@ -2,7 +2,7 @@
 id: T03-08
 title: "SPA: admin users table with paging, role line, admin-only nav"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: frontend
 skills: [react-expert, spa-api-client, amplify-auth]
 depends_on: []
@@ -20,7 +20,8 @@ W3-G4, S6: the administrator sees all users in a read-only table; every user see
 
 ## // TECHNICAL CONSTRAINTS
 
-- Contract: spec 08 (`MeResponse` unchanged; new `User` and page types); UI states and texts: spec 09 exactly.
+- Contract: spec 08 (`GET /admin`; `User` and page types); role from the access token `cognito:groups` (spec 09,
+  ADR-018 — no `/api/me`); UI states and texts: spec 09 exactly.
 - Server data only through TanStack Query; access token per ADR-004 (existing `api/client.ts`); no request without
   `VITE_API_URL` (AC-04.10 must still hold).
 - Profile values stay from `fetchUserAttributes` (Q-19 A); reuse `profile/format.ts` (`roleLine`, date, country).
@@ -42,7 +43,7 @@ W3-G4, S6: the administrator sees all users in a read-only table; every user see
 - Sorting UI, filters, editing, Chat (Week 5)
 
 **Interfaces that must match**
-- Query keys `['me']`, `['admin','users',page]`; field names of spec 08.
+- Query keys `['groups', userId]` (token, no request), `['admin','users',page]`; path `/admin`; field names of spec 08.
 
 ## Definition of Done
 
@@ -103,3 +104,6 @@ W3-G4, S6: the administrator sees all users in a read-only table; every user see
     the `/api` prefix rule of CLAUDE.md §6 are superseded by this decision (docs owned by other agents).
   - `npm test` 7 files / 70 tests green; `npm run build` green. `npm run preview` not re-run (AC-09.2 path unchanged:
     `AdminPage` still renders `ComingLater` without `VITE_API_URL`) — **not verified** after this change.
+- 2026-11-17 (architect): TECHNICAL CONSTRAINTS and "Interfaces that must match" re-worded to ADR-018 and spec 09
+  (role from the token, key `['groups', userId]`, path `/admin`); AC numbering unchanged.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).

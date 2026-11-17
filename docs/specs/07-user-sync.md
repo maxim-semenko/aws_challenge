@@ -7,7 +7,8 @@ Tasks: T03-04, T03-05, T03-10
 Written against [Q-17](../RISKS.md#q-17) option A and [Q-18](../RISKS.md#q-18) option A — both accepted by the
 owner on 2026-11-13 (ADR-016, ADR-006 revised). Revised 2026-11-16 (owner): `aws-challenge-sync` also hosts the
 migration runner, so its handler first routes the event (dispatch table: [spec 06](06-users-table-and-migrations.md)
-§Inputs); runtime Python 3.12 (ADR-015 revised). No AC changed.
+§Inputs); runtime Python 3.12 (ADR-015 revised). No AC changed. 2026-11-16 (ARCH review T03-04): sync function
+error strings added to §Outputs; no AC changed.
 
 ## Purpose
 
@@ -61,6 +62,16 @@ Unknown keys in `detail` or `detail.attributes` are ignored by the Sync Lambda.
 
 Never logged: e-mail, names, gender, birth date, country, height, weight, the event detail, tokens.
 
+**Sync function errors** (the Lambda error message; same style as spec 06 §Outputs; never a value or foreign driver
+text; every one of them makes Lambda retry the async invocation):
+
+| Case | Function error message |
+|---|---|
+| DB connection fails (proxy, IAM auth, TLS) | `DB_CONNECT_FAILED` (spec 06) |
+| SQL or connection error during the upsert | `USER_SYNC_FAILED: <SQLSTATE>`, or `USER_SYNC_FAILED: UNKNOWN` when the driver gives no SQLSTATE (lost connection, socket timeout) |
+
+A `rejected` event is not an error (normal return, no retry).
+
 ## Behaviour
 
 1. The owner confirms a user (Cognito console *Confirm account* → `AdminConfirmSignUp`); Cognito invokes the
@@ -90,7 +101,7 @@ Never logged: e-mail, names, gender, birth date, country, height, weight, the ev
 | `sub` not a UUID or `email` missing | `rejected`, no row, no retry |
 | EventBridge `PutEvents` throttled / unreachable | trigger logs `publish_failed`; user confirmed; row missing → re-sync runbook |
 | Trigger cold start | completes well under the 5 s Cognito limit (R-02); duration recorded |
-| Proxy or DB unavailable | Sync `failure`, async retries; then re-sync runbook |
+| Proxy or DB unavailable | Sync `failure` (`DB_CONNECT_FAILED` or `USER_SYNC_FAILED: …`, §Outputs), async retries; then re-sync runbook |
 | User confirmed before the trigger existed | no row until the back-fill runbook |
 | User later changes attributes (`UpdateUserAttributes`) | not synced (R-12) |
 | Forgot-password confirmation | trigger `ignored`, no event |

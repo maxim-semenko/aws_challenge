@@ -1,8 +1,8 @@
 ---
 id: T03-06
-title: "Admin Lambda: GET /api/me and GET /api/admin/users (Python, pytest)"
+title: "Admin Lambda: GET /admin users list (Python, pytest)"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: backend
 skills: [postgres-pro, test-master, http-api-jwt, admin-api]
 depends_on: [T03-02]
@@ -11,20 +11,21 @@ design: ../../design/admin-api.md
 spec: ../../specs/08-admin-api.md
 acceptance: [AC-08.1]
 ---
-# T03-06 — Admin Lambda: `GET /api/me` and `GET /api/admin/users`
+# T03-06 — Admin Lambda: `GET /admin` users list
 
 ## // BUSINESS CONTEXT
 
 W3-G2, W3-G3, S3 (curriculum: "Admin Lambda ↔ RDS Proxy"): the administrator's users table needs a paginated,
-admin-only endpoint over PostgreSQL; every user needs the own role. The `admin` code moves from the console into Git
-(R-15).
+admin-only endpoint over PostgreSQL — `GET /admin` of the curriculum diagram (ADR-018). The `admin` code moves from
+the console into Git (R-15). The own role is read by the SPA from the token (spec 09), not from this function.
 
 ## // TECHNICAL CONSTRAINTS
 
 - Conventions of the `python-lambda` skill; shared DB helper; payload format 2.0; claims only from
   `requestContext.authorizer.jwt.claims`.
 - Order of checks, responses, errors (problem+json), headers, log line: spec 08 character for character.
-- `/api/me` makes no DB call (Q-19 A). Sort column from a fixed whitelist; parameterised SQL; `LIMIT/OFFSET`.
+- Only routeKey `GET /admin` is served; any other → 404 (ADR-018). Sort column from a fixed whitelist; parameterised
+  SQL; `LIMIT/OFFSET`.
 - No secret, token or user data in logs; DB failures → 500 with generic `detail`.
 - The Week 1 direct-invoke probe is not kept (design admin-api §2).
 
@@ -32,10 +33,10 @@ admin-only endpoint over PostgreSQL; every user needs the own role. The `admin` 
 
 **Implement**
 - `lambdas/admin/` handler, `requirements.txt`, `tests/` covering AC-08.1; zip builds
-- Update skill `python-lambda` (API handler section: routing, claims, problem+json, log line)
+- Skill `admin-api` (routing, claims, problem+json, log line; pointer from `python-lambda`)
 
 **Exclude**
-- AWS changes (T03-07); SPA (T03-08); filtering by field (not in spec 08); `/api/admin/ping` (dropped)
+- AWS changes (T03-07); SPA (T03-08); filtering by field (not in spec 08); `/api/...` routes (ADR-018)
 
 **Interfaces that must match**
 - Endpoint contract: spec 08 §Inputs/§Outputs; table columns: spec 06.
@@ -120,3 +121,12 @@ admin-only endpoint over PostgreSQL; every user needs the own role. The `admin` 
     `2Cu/mq0frEXl1gja/tcfczlSJ/H9FltjW+0awOXH1Ho=` (`db.py` unchanged, `e3e71eb0…ff349c`). Supersedes the 2026-11-16
     hash `497f819a…`; the T03-07 upload must use this zip.
   - Not changed here (other agents): spec 08, design admin-api, PLAN.md, frontend, the T03-07 route runbook.
+- 2026-11-17 (architect): title, BUSINESS CONTEXT, TECHNICAL CONSTRAINTS and SCOPE re-worded to ADR-018 (spec 08 now
+  specifies only `GET /admin`; AC numbering unchanged). Deployed zip (owner, T03-07 Notes): console SHA-256
+  `2Cu/mq0frEXl1gja/tcfczlSJ/H9FltjW+0awOXH1Ho=` = the hash above, committed in `faf7a15`. **Reproducibility caveat:**
+  the zip was built from a working copy where `lambdas/admin/lambda_function.py` had CRLF line endings; Git normalised
+  the file to LF on commit (`.gitattributes` `lambdas/** text eol=lf`; `git ls-files --eol` shows `i/lf w/crlf`), so
+  `lambdas/package.py admin` from a clean checkout of `faf7a15` gives a **different** hash than the deployed one (same
+  code apart from line endings). The deployed artefact is therefore not byte-reproducible from Git; the next upload
+  of `admin` should be built from a clean checkout (LF working copy) and its hash recorded.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).

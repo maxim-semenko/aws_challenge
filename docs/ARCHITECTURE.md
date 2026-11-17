@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — AWS Challenge
 
-Status: **draft v0.9 (2026-11-16, ADR-015 / ADR-017 revised by the owner: Python 3.12, no `migrate` function)**. This file holds the system-wide principles, components and ADRs. Decisions
+Status: **draft v0.10 (2026-11-17, ADR-018: API routes as in the curriculum diagram, no `/api` prefix)**. This file holds the system-wide principles, components and ADRs. Decisions
 marked *Proposed* need the owner's confirmation and are not implemented before that. Feature-level detail lives in
 [design/](design/) (one doc per feature, written before coding), behaviour in [specs/](specs/), open decisions and
 risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
@@ -91,8 +91,8 @@ flowchart LR
         DB[(RDS PostgreSQL 14<br/>+ pgvector from Week 4)]
     end
 
-    APIGW -->|/api/chat/*| LC
-    APIGW -->|/api/me, /api/admin/*| LA
+    APIGW -->|POST /chat| LC
+    APIGW -->|GET /admin| LA
     LC --> PX
     LA --> PX
     LS --> PX
@@ -131,8 +131,8 @@ while local tests run on 3.13), deployed as zip files; there is no backend appli
 
 | Function | Trigger | Responsibility | From |
 |---|---|---|---|
-| `admin` | HTTP API | `/api/me`, `/api/admin/*` (Week 1 `SELECT 1` probe dropped in Week 3) | Week 1 (probe), Week 3 (API) |
-| `chatbot` | HTTP API | `/api/chat/*`: similarity search, Bedrock Agent | Week 5 |
+| `admin` | HTTP API | `GET /admin`: paginated users list for the group `admin` (Week 1 `SELECT 1` probe dropped in Week 3) | Week 1 (probe), Week 3 (API) |
+| `chatbot` | HTTP API | `POST /chat`: similarity search, Bedrock Agent | Week 5 |
 | `sync` | EventBridge rule (`UserConfirmed`); direct invoke by the owner (`{"action":"status"\|"migrate"}`) | copy of the user into PostgreSQL, embedding on insert/update (Week 4); applies versioned SQL migrations on the owner's invoke (ADR-017) | Week 3, Week 4 |
 | `post-confirmation` | Cognito PostConfirmation trigger | puts `UserConfirmed` on the bus; outside the VPC | Week 3 (ADR-016) |
 
@@ -143,8 +143,9 @@ Source layout, packaging (shared DB helper copied into each zip) and tests: [des
 ### 3.3 API Gateway (HTTP API)
 Week 2 as built (design [api-gateway-auth](design/api-gateway-auth.md), values in [ENVIRONMENT.md](ENVIRONMENT.md)):
 JWT authorizer on `GET /admin` and `POST /chat`, CORS for the Amplify origin only, no access log, no endpoint contract.
-The bullets below are the target; Week 3 reaches it ([design/admin-api](design/admin-api.md) §3: `/api` routes, old
-routes deleted, access log, throttling, localhost CORS).
+The bullets below are the target. Week 3 keeps the two routes of the curriculum diagram (ADR-018), gives `GET /admin`
+its contract and adds localhost CORS ([design/admin-api](design/admin-api.md) §3); the access log and stage
+throttling are deferred to Week 6 (owner, 2026-11-17).
 - JWT authorizer: issuer `https://cognito-idp.<region>.amazonaws.com/<userPoolId>`, audience `<appClientId>`
   (for access tokens API Gateway matches `client_id`, because they carry no `aud`).
 - Only explicit `METHOD /path` routes, no `ANY` / `$default` route, so CORS preflight is answered by API Gateway
@@ -154,8 +155,8 @@ routes deleted, access log, throttling, localhost CORS).
 - 401 responses produced by the authorizer have the fixed body `{"message":"Unauthorized"}` (HTTP API has no
   gateway responses) — a known exception to the problem+json rule of CLAUDE.md §6.
 - CORS: only the Amplify app domain and `http://localhost:5173`.
-- Access logs as JSON in CloudWatch; `requestId` equals `apiRequestId` in Lambda logs.
-- Stage throttling: 50 rps / burst 100 (learning workload). Integration timeout 29 s (Week 5).
+- Access logs as JSON in CloudWatch; `requestId` equals `apiRequestId` in Lambda logs (Week 6).
+- Stage throttling: 50 rps / burst 100 (learning workload; Week 6). Integration timeout 29 s (Week 5).
 
 ### 3.4 Cognito User Pool
 - E-mail as the sign-in (username) attribute, new accounts confirmed by the owner in the console (no code in the
@@ -221,12 +222,16 @@ query containing "sql" into SQL. Designed when Weeks 4 and 5 are planned.
 
 | Method | Path | Auth | Body / parameters | Response | Week |
 |---|---|---|---|---|---|
-| GET / POST | `/admin` / `/chat` | JWT | — | no contract; proves the authorizer only — [spec 05](specs/05-protected-api.md) | 2 (as built); deleted in Week 3 |
-| GET | `/api/me` | JWT | — | `{id, username, groups, expiresAt}` from the token claims — [spec 08](specs/08-admin-api.md) | 3 |
-| GET | `/api/admin/users` | JWT + `admin` | `page`, `size(1..100)`, `sort` | `{items[], page, size, total}` — [spec 08](specs/08-admin-api.md) | 3 |
-| POST | `/api/chat/search` | JWT | to be specified | to be specified | 5 |
+Routes exactly as in the curriculum architecture diagram (ADR-018); no other route exists.
 
-Conventions (auth header, pagination, filtering, errors): CLAUDE.md §6. 502 is used for Bedrock failures.
+| Method | Path | Auth | Body / parameters | Response | Week |
+|---|---|---|---|---|---|
+| GET | `/admin` | JWT + `admin` | `page`, `size(1..100)`, `sort` | `{items[], page, size, total}` of users — [spec 08](specs/08-admin-api.md) | 2 (route, no contract); 3 (contract) |
+| POST | `/chat` | JWT | to be specified | to be specified | 2 (route, no contract); 5 (contract) |
+
+The SPA reads the caller's identity and role from the access token (`cognito:groups`), not from the API
+([spec 09](specs/09-admin-page-and-role.md)). Conventions (auth header, pagination, filtering, errors): CLAUDE.md §6.
+502 is used for Bedrock failures.
 
 ---
 
@@ -270,7 +275,7 @@ columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single hom
 
 | Attribute | Target |
 |---|---|
-| Latency | `/api/admin/*` p95 < 300 ms warm; search results < 1 s (Week 5) |
+| Latency | `GET /admin` p95 < 300 ms warm; search results < 1 s (Week 5) |
 | Timeouts | API Gateway integration 29 s, chatbot Lambda 30 s (Week 5); other functions as built |
 | Lambda | Python 3.12, zip; memory and architecture as built (§4), tuned by measurement |
 | Cost | learning budget; figures in each design doc's Cost section (Week 1: [backend-foundation](design/backend-foundation.md)); stop or remove idle resources ([R-06](RISKS.md#2-risk-register)) |
@@ -298,6 +303,7 @@ columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single hom
 | ADR-015 | Server code | **Accepted** (2026-11-12; revised 2026-11-16, owner) | Python 3.12 Lambda functions `admin`, `chatbot`, `sync` + trigger `post-confirmation`, zip deploys, no backend application |
 | ADR-016 | User sync wiring | **Accepted** (2026-11-13, [Q-17](RISKS.md#q-17) A) | PostConfirmation trigger (outside the VPC) → `PutEvents` → custom bus → rule → Sync Lambda |
 | ADR-017 | Migrations | **Accepted** (2026-11-13, [Q-16](RISKS.md#q-16) A; revised 2026-11-16, owner) | Versioned SQL files applied by a Python runner module inside `aws-challenge-sync`, on the owner's direct invoke |
+| ADR-018 | API routes | **Accepted** (2026-11-17, owner) | Routes exactly as in the curriculum diagram: `GET /admin` (users list, group `admin`) and `POST /chat`; no `/api` prefix, no `/api/me` (role from the token) |
 
 **ADR-001 — IaC (Deferred).** Week 1 was built in the console and Week 2 is built by the owner from console runbooks
 (Q-12 C; agents have no AWS access, so IaC code will be deployed by the owner too). A dedicated task (T00-03) codifies the existing resources once the tool is chosen in
@@ -351,6 +357,22 @@ the API-facing function); Flyway from CloudShell (no egress); Alembic. *Conseque
 EventBridge envelope never carries a top-level `action` key); DDL rights were already shared through the one proxy DB
 user (R-16). Detail: [design/user-sync](design/user-sync.md) §2, [spec 06](specs/06-users-table-and-migrations.md).
 
+**ADR-018 — API routes follow the curriculum diagram (Accepted 2026-11-17, owner).** *Context:* the Week 3 design
+(admin-api, 2026-11-13) replaced the as-built Week 2 routes `GET /admin`, `POST /chat` with `GET /api/me` and
+`GET /api/admin/users` under the `/api` prefix of the then CLAUDE.md §6; the curriculum architecture diagram names
+only `GET /admin` → Admin Lambda and `POST /chat` → Chatbot Lambda. *Decision:* the HTTP API has exactly these two
+routes, both with the JWT authorizer. `GET /admin` returns the paginated users list to members of the group `admin`
+(403 otherwise; `page`/`size`/`sort`, `{items,page,size,total}`, problem+json — spec 08); `POST /chat` stays without
+a contract until Week 5. No `/api` prefix and no `/api/me`: the SPA takes the role from `cognito:groups` of the access
+token it already holds (spec 09). *Alternatives:* `/api/me` + `/api/admin/users` (the 2026-11-13 design: CLAUDE.md §6
+style, one role source on the server, but routes beyond the diagram and one extra request per session); keep
+`GET /admin` and add `GET /api/me` (role from the server, but a second path style). *Consequences:* the routes the
+owner created on 2026-11-17 under `/api` are deleted; the SPA's Admin link and role line are display only (the
+handler enforces the group); a user added to `admin` sees the role after the next sign-in or token refresh (as
+before); `/admin` is both an SPA page and an API path on different hosts (no conflict); the derived Week 3 step S4
+("routes under `/api`") is superseded; the API access log and stage throttling (S8, ARCHITECTURE §3.3) move to Week 6
+(owner, 2026-11-17). Detail: [design/admin-api](design/admin-api.md).
+
 **ADR-007 — Vectors (Proposed).** 1024 is Titan v2's maximum; HNSW needs no training step; IVFFlat needs data before
 building and is kept for the comparison. Challenged by the Week 4 curriculum (1536 dimensions, `<->` operator) —
 [Q-15](RISKS.md#q-15), decided when Week 4 is planned.
@@ -364,7 +386,8 @@ Until Week 6 handlers print one JSON line per invocation with the standard libra
 returns the caller's token claims and proves the protected API, not the profile. Week 3 copies users into
 PostgreSQL through the EventBridge sync chain (curriculum); the personal page does not switch to the database copy
 ([Q-19](RISKS.md#q-19) A, owner 2026-11-13). *Amended 2026-11-13 (owner):* `GET /api/me` moved to Week 3; in Week 2 the SPA calls no
-API. *Alternatives considered:* `app_user` read model behind `GET /api/me` already in Week 2
+API. *Amended 2026-11-17 (owner, ADR-018):* there is no `GET /api/me`; the SPA reads the role from the access
+token's `cognito:groups`. *Alternatives considered:* `app_user` read model behind `GET /api/me` already in Week 2
 (moved to Week 3 by the curriculum); PostgreSQL only with Cognito for credentials (duplicates Cognito sign-up).
 *Consequence:* the user can change own attributes through `UpdateUserAttributes` ([R-12](RISKS.md#2-risk-register)).
 
@@ -399,7 +422,7 @@ tests and migrations are decided with the first schema (ADR-017).
 | G1 | Amplify Hosting, `amplify.yml` | Week 1 — [spec 01](specs/01-spa-delivery.md) | push to `main` → new SPA version live without manual steps |
 | G2 | CloudFront (Amplify), VPC | Week 1 — [spec 01](specs/01-spa-delivery.md), [spec 02](specs/02-database-connectivity.md) | SPA served by CloudFront (`x-cache`, `via`); backend has no public IPs |
 | G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL ([spec 07](specs/07-user-sync.md)) | sign-up → owner confirms → sign-in → tokens in SPA → personal page; Week 3: confirmed user → row in `users` |
-| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — [spec 08](specs/08-admin-api.md), [spec 09](specs/09-admin-page-and-role.md) | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: access token → 200, non-admin on `/api/admin` → 403 |
+| G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — [spec 08](specs/08-admin-api.md), [spec 09](specs/09-admin-page-and-role.md) | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: admin's access token on `GET /admin` → 200, non-admin → 403 |
 | G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md); Week 3 — [spec 06](specs/06-users-table-and-migrations.md), [spec 08](specs/08-admin-api.md) | Lambda connects only to the proxy endpoint (Week 3: IAM auth, no secret in the function) |
 | G6 | pgvector, HNSW / IVFFlat | Week 4 | similarity query uses the index; latency on 1000 records recorded |
 | G7 | Bedrock embeddings | Week 4 ([Q-15](RISKS.md#q-15)) | embedding computed by the Sync Lambda on insert/update |

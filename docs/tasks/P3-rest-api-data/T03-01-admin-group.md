@@ -2,7 +2,7 @@
 id: T03-01
 title: "Cognito group admin and the first administrator (console runbook)"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, cognito-user-pool]
 depends_on: []
@@ -99,7 +99,7 @@ console.log('token_use', p.token_use, 'groups', JSON.stringify(p['cognito:groups
 ```
 
 Expected output: `token_use access groups ["admin"]`. Report back: screenshot S3 of that one output line (nothing
-else from the console). The end-to-end proof via `GET /api/me` follows in T03-07 / AC-08.6.
+else from the console). The end-to-end proof via `GET /admin` (200 for the admin) follows in T03-07 / AC-08.6 (ADR-018, 2026-11-17).
 
 **Rollback:** Groups → `admin` → remove the member / **Delete group** (no other resource depends on it until T03-07).
 
@@ -113,3 +113,4 @@ else from the console). The end-to-end proof via `GET /api/me` follows in T03-07
 
 _(to be filled from the owner's report: date, S1, S2, S3 results)_
 - 2026-11-16 (owner screenshot): group `admin` created 2026-11-16 17:11 (description "Administrators: read-only access to the user list (Week 3)", no IAM role, no precedence); 1 member — `test@gmail.com` (sub `725594e4-…`, Confirmed, Enabled). S1/S2 evidence for AC-08.2 received. Token check (`cognito:groups`) follows after re-sign-in, verified end to end by T03-07/T03-10.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).

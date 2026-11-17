@@ -2,7 +2,7 @@
 
 Related: [CLAUDE.md](../CLAUDE.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [RISKS.md](RISKS.md) ·
 [requirements/](requirements/) · [design/](design/) · [specs/](specs/) · [tasks/](tasks/)
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 ## How the plan works
 
@@ -28,7 +28,7 @@ Last updated: 2026-11-16
 | **P0-foundation** | 1 | account and local access, Git repository, SPA that builds and renders without config; later: IaC import (T00-03) | [spa-hosting](design/spa-hosting.md), [backend-foundation](design/backend-foundation.md) | [01](specs/01-spa-delivery.md), [02](specs/02-database-connectivity.md), [03](specs/03-local-aws-access.md) |
 | **P1-environment** | 1 | SPA on Amplify/CloudFront; VPC, RDS, RDS Proxy; three Python Lambdas with logs; `SELECT 1` through the proxy — built manually by the owner, accepted 2026-11-12 | same | same |
 | **P2-authorization** | 2 | Curriculum topic only (owner, 2026-11-13): Cognito User Pool + own Amplify Auth screens, personal page from Cognito attributes, HTTP API with JWT authorizer (built by the owner). `admin` group, Admin Lambda code, `/api/...` endpoints and the role line moved to Week 3 | [authentication](design/authentication.md), [api-gateway-auth](design/api-gateway-auth.md) | [04](specs/04-user-registration-and-sign-in.md), [05](specs/05-protected-api.md) |
-| **P3-rest-api-data** | 3 | Curriculum topic: Admin Lambda ↔ RDS Proxy; sync chain Cognito → EventBridge → Lambda. Users table + migrations, DB access without secrets, group `admin`, `/api/me` and `/api/admin/users`, admin table and role line in the SPA, API/handler logs; deep-link fix | [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) | [06](specs/06-users-table-and-migrations.md), [07](specs/07-user-sync.md), [08](specs/08-admin-api.md), [09](specs/09-admin-page-and-role.md) |
+| **P3-rest-api-data** | 3 | Curriculum topic: Admin Lambda ↔ RDS Proxy; sync chain Cognito → EventBridge → Lambda. Users table + migrations, DB access without secrets, group `admin`, `GET /admin` (users list; ADR-018), admin table and role line (from the token) in the SPA, handler logs (API access log: Week 6); deep-link fix | [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) | [06](specs/06-users-table-and-migrations.md), [07](specs/07-user-sync.md), [08](specs/08-admin-api.md), [09](specs/09-admin-page-and-role.md) |
 | P4+ | 4+ | planned when the next week's requirements arrive (curriculum overview: ARCHITECTURE §1.1) | — | — |
 
 Week 1 (built manually; accepted by the owner 2026-11-12):
@@ -69,7 +69,7 @@ flowchart LR
     T0302 --> T0306[T03-06 admin Lambda code]
     T0303 --> T0305[T03-05 sync chain on AWS + sync code upload]
     T0304 --> T0305
-    T0301[T03-01 group admin] --> T0307[T03-07 admin deploy + /api routes + logs]
+    T0301[T03-01 group admin] --> T0307[T03-07 admin deploy + GET /admin + CORS]
     T0303 --> T0307
     T0306 --> T0307
     T0308[T03-08 SPA admin table + role] -.verified after.-> T0307
@@ -143,16 +143,16 @@ amended); runtime Python 3.12 for all functions (ADR-015 revised). T03-02 re-ope
 
 | ID | Task | Agent | Skills | Depends on | Blocked by | Design | Spec | Status |
 |---|---|---|---|---|---|---|---|---|
-| [T03-01](tasks/P3-rest-api-data/T03-01-admin-group.md) | Cognito group `admin` and the first administrator | devops | cloud-architect, cognito-user-pool | — | — | admin-api | 08 | Review |
+| [T03-01](tasks/P3-rest-api-data/T03-01-admin-group.md) | Cognito group `admin` and the first administrator | devops | cloud-architect, cognito-user-pool | — | — | admin-api | 08 | Done |
 | [T03-02](tasks/P3-rest-api-data/T03-02-migrations-and-python-lambda-base.md) | Python Lambda base and migrations runner in sync with V1 users table | backend | postgres-pro, test-master | — | — | user-sync | 06 | Done |
-| [T03-03](tasks/P3-rest-api-data/T03-03-database-access-and-first-migration.md) | RDS Proxy IAM auth, sync DB configuration, first migration via sync | devops | cloud-architect, postgres-pro | T03-02 | — | user-sync | 06 | Review |
-| [T03-04](tasks/P3-rest-api-data/T03-04-sync-and-trigger-lambdas.md) | Post-confirmation trigger and Sync Lambda code | backend | postgres-pro, test-master | T03-02 | — | user-sync | 07 | Todo |
-| [T03-05](tasks/P3-rest-api-data/T03-05-sync-chain.md) | Sync chain on AWS: bus, rule, trigger, sync code upload | devops | cloud-architect, cognito-user-pool | T03-03, T03-04 | — | user-sync | 07 | Todo |
-| [T03-06](tasks/P3-rest-api-data/T03-06-admin-lambda.md) | Admin Lambda: `GET /api/me`, `GET /api/admin/users` | backend | postgres-pro, test-master, http-api-jwt | T03-02 | — | admin-api | 08 | Todo |
-| [T03-07](tasks/P3-rest-api-data/T03-07-api-routes-and-admin-deploy.md) | Admin deploy, `/api` routes, access log, throttling, CORS | devops | cloud-architect, http-api-jwt | T03-01, T03-03, T03-06 | — | admin-api | 06, 08 | Todo |
-| [T03-08](tasks/P3-rest-api-data/T03-08-admin-page-and-role.md) | SPA: admin users table, role line, admin-only nav | frontend | react-expert, spa-api-client, amplify-auth | — | — | admin-api | 09 | Review |
-| [T03-09](tasks/P3-rest-api-data/T03-09-amplify-deep-link-rewrite.md) | Amplify SPA rewrite fix (deep links) | devops | cloud-architect, devops-engineer | — | — | spa-hosting | 01 | Review |
-| [T03-10](tasks/P3-rest-api-data/T03-10-week-3-acceptance.md) | Week 3 acceptance check | tester | test-master | T03-01, T03-02, T03-03, T03-04, T03-05, T03-06, T03-07, T03-08, T03-09 | — | — | 01, 06, 07, 08, 09 | Todo |
+| [T03-03](tasks/P3-rest-api-data/T03-03-database-access-and-first-migration.md) | RDS Proxy IAM auth, sync DB configuration, first migration via sync | devops | cloud-architect, postgres-pro | T03-02 | — | user-sync | 06 | Done |
+| [T03-04](tasks/P3-rest-api-data/T03-04-sync-and-trigger-lambdas.md) | Post-confirmation trigger and Sync Lambda code | backend | postgres-pro, test-master | T03-02 | — | user-sync | 07 | Done |
+| [T03-05](tasks/P3-rest-api-data/T03-05-sync-chain.md) | Sync chain on AWS: bus, rule, trigger, sync code upload | devops | cloud-architect, cognito-user-pool | T03-03, T03-04 | — | user-sync | 07 | Done |
+| [T03-06](tasks/P3-rest-api-data/T03-06-admin-lambda.md) | Admin Lambda: `GET /admin` users list | backend | postgres-pro, test-master, http-api-jwt, admin-api | T03-02 | — | admin-api | 08 | Done |
+| [T03-07](tasks/P3-rest-api-data/T03-07-api-routes-and-admin-deploy.md) | Admin deploy, `GET /admin` route check, CORS | devops | cloud-architect, http-api-jwt | T03-01, T03-03, T03-06 | — | admin-api | 06, 08 | Done |
+| [T03-08](tasks/P3-rest-api-data/T03-08-admin-page-and-role.md) | SPA: admin users table, role line, admin-only nav | frontend | react-expert, spa-api-client, amplify-auth | — | — | admin-api | 09 | Done |
+| [T03-09](tasks/P3-rest-api-data/T03-09-amplify-deep-link-rewrite.md) | Amplify SPA rewrite fix (deep links) | devops | cloud-architect, devops-engineer | — | — | spa-hosting | 01 | Done |
+| [T03-10](tasks/P3-rest-api-data/T03-10-week-3-acceptance.md) | Week 3 acceptance check | tester | test-master | T03-01, T03-02, T03-03, T03-04, T03-05, T03-06, T03-07, T03-08, T03-09 | — | — | 01, 06, 07, 08, 09 | Done |
 
 ## Change log
 
@@ -175,3 +175,5 @@ amended); runtime Python 3.12 for all functions (ADR-015 revised). T03-02 re-ope
 | 2026-11-13 | **Week 3 planned** (REST API + data; requirements derived from the topic line): design docs user-sync, admin-api (`Draft`); specs 06–09; 10 tasks in P3-rest-api-data (T03-01, T03-09, T03-10 `Todo`; the rest `Blocked`). RISKS: Q-16 refined, Q-17, Q-18 (with owner facts F1–F5), Q-19 added; R-02, R-09, R-11, R-12, R-14, R-15 updated; R-16 added. ARCHITECTURE v0.7: §1.1, §2, §3.2–3.5, §5.1, §6, §7, §8, §12; ADR-006 revision, ADR-016, ADR-017 Proposed. Notes added to specs 01, 04, 05; week-02 and week-03 traceability. Owner-only follow-up: CLAUDE.md §1/§2/§4/§9 (new functions `migrate`, `post-confirmation`; Week 3 planned; local PostgreSQL 14) |
 | 2026-11-13 | **Owner decisions ("ok, let's go"):** Q-16 A, Q-17 A, Q-18 A (R-16 accepted), Q-19 A — closed in RISKS.md; ADR-006 (revised), ADR-016, ADR-017 `Accepted`; ADR-008 superseded by ADR-017. Design docs user-sync and admin-api `Accepted`; specs 06–09 headers updated (no content change). Q-18 facts F1–F5 moved to T03-03 as runbook step 1 (owner evidence, not a blocker); T03-05/T03-07 reuse them from ENVIRONMENT.md. T03-02 … T03-08 unblocked → `Todo`. CLAUDE.md §1, §2, §4, §9 edited with the owner's approval (functions `migrate`, `post-confirmation`; now Week 3; local PostgreSQL major 14 — image switch stays in T03-02). ARCHITECTURE v0.8. Startable now: T03-01, T03-02, T03-08, T03-09 |
 | 2026-11-16 | **Owner decisions:** (1) no function `aws-challenge-migrate` — the runner is a module of `aws-challenge-sync`, which dispatches on the event (`action` → runner, `UserConfirmed` → upsert, else `UNSUPPORTED_EVENT`); ADR-017 revised (still Accepted), Q-16 amended. (2) Functions: `admin`, `chatbot`, `sync` + trigger `post-confirmation` (ADR-016 kept, ADR-015 list amended). (3) Runtime Python 3.12 for all functions, local tests on 3.13 with 3.12-compatible code (ADR-015 revised; every "switch to 3.13" step removed). (4) T03-03 step 1 done (`aws-challenge-db-sg` outbound all traffic to `0.0.0.0/0`, ENVIRONMENT.md); old steps 3–5 (migrate log group, role, function) dropped, not executed. (5) Re-cut: T03-02 re-opened `Review` → `Todo` (move runner to `lambdas/sync/`, dispatcher, pip `--python-version 3.12`; exact list in its Notes); T03-03 re-scoped (proxy IAM auth + TLS, sync DB config, first migration via sync's Test tab; AC-06.6 sync part added); T03-04 extends the T03-02 dispatcher; T03-05 sync step reduced to the code upload, AC-06.6 and spec 06 removed; T03-07 runtime 3.12. Spec 06 (dispatch table, `UNSUPPORTED_EVENT`, AC-06.1/06.2/06.3/06.4/06.5/06.6 reworded), spec 07 header + Behaviour 4, spec 08 AC-08.9; design user-sync (revised, Accepted kept as owner decision) and admin-api; ARCHITECTURE v0.9 (§2, §3.2, §10, ADR-015/016/017); RISKS Q-13, Q-16, R-15, R-16; skills `python-lambda`, `postgres-migrations`. CLAUDE.md §1/§4/§7/§8 and `.claude/agents/backend.md` still say 3.13 / `migrate` — owner edit pending |
+| 2026-11-17 | **Owner decision — API routes strictly per the curriculum diagram (ADR-018):** only `GET /admin` (users list for the group `admin`, 403 otherwise; `{items,page,size,total}`, page/size/sort, problem+json) and `POST /chat` (Week 5); no `/api` prefix, no `/api/me`, no `/api/admin/users` (deleted by the owner); the SPA reads the role from the access token's `cognito:groups`. API access log and stage throttling deferred to Week 6. CLAUDE.md §6 (owner-approved edit); ARCHITECTURE v0.10 (§2, §3.2, §3.3, §6, §10, §12, ADR-013 note, ADR-018); design admin-api amended (Accepted kept); spec 08 rewritten for `GET /admin` (AC ids kept; AC-08.7 handler log only, AC-08.8 CORS + resource policy only); spec 09 role from the token; spec 05 note; T03-06/T03-07 titles and scope, T03-07 runbook steps 4–6 re-cut (steps 1–3 done; new admin zip `2Cu/mq0f…`; AC-08.4 evidence received); T03-01, T03-08, T03-10 notes; RISKS Q-19 amendment note; skill `http-api-jwt`. Statuses unchanged |
+| 2026-11-17 | **Week 3 closed by the owner:** T03-01 … T03-10 → `Done`. Acceptance (T03-10): 18 pass, 8 accepted on the owner statement, 1 waived (AC-07.5), 0 fail. Next: plan Week 4 (vectorisation) when the owner starts it |

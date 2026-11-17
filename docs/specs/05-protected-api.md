@@ -8,9 +8,10 @@ Reduced 2026-11-13 (owner: Week 2 = the curriculum topic only). **Moved to Week 
 Lambda code in Git, `GET /api/me`, `GET /api/admin/ping`, the `admin` group check (403), the `token_use` check, the
 handler's `application/problem+json` errors, the role line in the SPA, the API access log and the log-content checks.
 
-Week 3 (planned 2026-11-13, [spec 08](08-admin-api.md)): the routes `GET /admin` and `POST /chat` are replaced by
-`GET /api/me` and `GET /api/admin/users`; AC-05.2's route list is then superseded by AC-08.3, the authorizer
-behaviour (AC-05.1, AC-05.3 … AC-05.6) applies to the new routes.
+Week 3 ([spec 08](08-admin-api.md), ADR-018, owner 2026-11-17): the routes `GET /admin` and `POST /chat` stay (the
+curriculum diagram's routes; the 2026-11-13 plan to replace them with `/api/...` routes is withdrawn); `GET /admin`
+gets its contract in spec 08 (AC-08.3 adds the integration check); the authorizer behaviour (AC-05.1 … AC-05.6)
+still applies.
 
 ## Purpose
 

@@ -2,7 +2,7 @@
 id: T03-04
 title: "Post-confirmation trigger and Sync Lambda code (Python, pytest)"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: backend
 skills: [postgres-pro, test-master]
 depends_on: [T03-02]
@@ -144,3 +144,4 @@ survive dirty values from direct `SignUp` calls (R-11, Q-14 C).
     acceptable, documented in the skill.
   Re-review needed only for B1 (diff of the three files + new zip hash).
 - 2026-11-16 (B1 fixed by the assistant): `lambdas/post-confirmation/lambda_function.py` client config now `connect_timeout=1, read_timeout=2, total_max_attempts=1`; test assert and the user-sync skill updated; `pytest lambdas/post-confirmation` 13 passed. New `post-confirmation.zip`: 2 files, 3 522 bytes, SHA-256 `0BDCBA9F97F61B0C9C61AB00A2BC8EFEAADBB797343A0D5450E5373B434F60F4` / base64 `C9y6n5f2GwycYasAoryO/qrbt5c0Og1UUOU3O0NPYPQ=` (replaces the earlier hash). `sync.zip` unchanged.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).

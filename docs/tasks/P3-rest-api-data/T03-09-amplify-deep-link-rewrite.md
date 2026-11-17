@@ -2,7 +2,7 @@
 id: T03-09
 title: "Amplify SPA rewrite fix: deep links 200 instead of 301 → 404 (console runbook)"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, devops-engineer]
 depends_on: []
@@ -113,3 +113,4 @@ for p in /chat /admin /sign-in /x.js; do echo "== $p"; curl -sSI "https://main.d
 
 _(to be filled: owner's R1–R3, and the agent's curl output after the owner reports "saved")_
 - 2026-11-16 (owner screenshots R1/R2): before — one rule `/<*>` → `/index.html` `404 (Rewrite)`; after — one rule `</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>` → `/index.html` `200 (Rewrite)`. Curl check (unauthenticated, public domain): `/`, `/chat`, `/admin`, `/sign-in`, `/sign-up` → 200 `text/html`, no Location header; `/x.js` → 404. AC-01.2 pass → `Review`.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).

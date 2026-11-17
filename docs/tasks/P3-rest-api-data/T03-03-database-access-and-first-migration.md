@@ -2,7 +2,7 @@
 id: T03-03
 title: "RDS Proxy IAM authentication, sync function DB configuration and first migration via sync (console runbook)"
 phase: P3-rest-api-data
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, postgres-pro]
 depends_on: [T03-02]
@@ -345,3 +345,4 @@ near zero. The proxy's Week 1 cost is unchanged.
 - 2026-11-16 (owner): `{"action":"migrate"}` → `{"applied": [1], "current": 1}` — table `users` (V1) created in database `postgres`. Pending evidence: run 3 (`migrate` again → `{"applied": [], "current": 1}`), run 4 (`status` → `{"current": 1, "pending": []}`), the CloudWatch log lines, General configuration and Environment variables screenshots.
 - 2026-11-16 (owner): `{"action":"status"}` after migrate → `{"current": 1, "pending": []}` — V1 is recorded in `schema_migrations` (persisted). The second `migrate` screenshot the owner sent was the earlier result again; the idempotent re-run is covered by the status result and unit tests. AC-06.5 pass. Still to collect for AC-06.4/06.6: General configuration (256 MB, 60 s) and Environment variables screenshots, CloudWatch log lines.
 - 2026-11-16 (owner statement): General configuration (256 MB, 60 s) and the three environment variables set as in the runbook; screenshots not provided — accepted on the owner statement plus functional evidence (successful IAM/TLS connection needs all three variables). Status → `Review`.
+- 2026-11-17: set to `Done` by the owner (Week 3 closed).
