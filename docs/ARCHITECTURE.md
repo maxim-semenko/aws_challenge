@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — AWS Challenge
 
-Status: **draft v0.10 (2026-11-17, ADR-018: API routes as in the curriculum diagram, no `/api` prefix)**. This file holds the system-wide principles, components and ADRs. Decisions
+Status: **draft v0.12 (2026-11-18, owner: ADR-019 Titan V2 1024 and ADR-020 on-demand Bedrock endpoint Accepted; ADR-007 superseded)**. This file holds the system-wide principles, components and ADRs. Decisions
 marked *Proposed* need the owner's confirmation and are not implemented before that. Feature-level detail lives in
 [design/](design/) (one doc per feature, written before coding), behaviour in [specs/](specs/), open decisions and
 risks in [RISKS.md](RISKS.md), work in [PLAN.md](PLAN.md).
@@ -50,8 +50,8 @@ Only the current week is planned ([PLAN.md](PLAN.md)); later rows are input for 
 |---|---|---|
 | 1 | Environment: Amplify Hosting + CloudFront; VPC; RDS PostgreSQL **14** + RDS Proxy; three Lambdas (Admin, Chatbot, Sync); `SELECT 1` from Admin; log groups | [requirements](requirements/week-01-environment.md); built manually, accepted by the owner 2026-11-12 |
 | 2 | Authorization: Cognito User Pool with Amplify Auth; HTTP API Gateway with JWT authorizer | [requirements](requirements/week-02-authorization.md); done 2026-11-13 |
-| 3 | REST API + data: Admin Lambda ↔ RDS Proxy; Sync chain Cognito → **EventBridge** → Lambda | [requirements](requirements/week-03-rest-api-data.md); planned 2026-11-13 — designs [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) (Accepted 2026-11-13) |
-| 4 | Create the `pgvector` extension; a function generates **1536-dimensional** vectors stored in `users.embedding`; similarity query `ORDER BY embedding <-> $1 LIMIT 5`; the Sync Lambda calls Bedrock Titan Embeddings (or Claude 3.5 Sonnet) on insert/update; `ivfflat` or `hnsw` index; check latency on 1000 records | not planned; conflict with ADR-007 → [Q-15](RISKS.md#q-15) |
+| 3 | REST API + data: Admin Lambda ↔ RDS Proxy; Sync chain Cognito → **EventBridge** → Lambda | [requirements](requirements/week-03-rest-api-data.md); done 2026-11-17 — designs [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) |
+| 4 | Create the `pgvector` extension; a function generates **1536-dimensional** vectors stored in `users.embedding`; similarity query `ORDER BY embedding <-> $1 LIMIT 5`; the Sync Lambda calls Bedrock Titan Embeddings (or Claude 3.5 Sonnet) on insert/update; `ivfflat` or `hnsw` index; check latency on 1000 records | [requirements](requirements/week-04-vectorisation.md); planned 2026-11-17 — design [vectorisation](design/vectorisation.md) (Accepted 2026-11-18; ADR-019, ADR-020) |
 | 5 | SPA search component → Chatbot Lambda → Bedrock Agent (NL→SQL if the query contains the keyword "sql", otherwise embedding similarity). Goals: results < 1 s; "users similar to …" returns the correct TOP-5; API Gateway timeout 29 s, Lambda 30 s; log latency and token count | not planned |
 | 6 | JSON logs (Powertools Logger, Lambda advanced logging controls), CloudWatch Logs Insights, X-Ray service map | not planned |
 
@@ -61,7 +61,9 @@ Notes for later planning:
 - Week 3 requires EventBridge in the sync chain (ADR-011 rejected). The wirings are compared in
   [design/user-sync](design/user-sync.md); decided as ADR-016 ([Q-17](RISKS.md#q-17) A).
 - Week 4 stores embeddings in the users table, so the chatbot searches users, not a separate document corpus
-  ([Q-05](RISKS.md#q-05)).
+  ([Q-05](RISKS.md#q-05), closed 2026-11-17).
+- Week 4 names "Titan Embeddings" and 1536 dimensions; the 1536-dimension Titan model is not offered in eu-west-1
+  and Claude is not an embedding model — the owner chose Titan V2 with 1024 dimensions (ADR-019, deviation in §2).
 
 ### Out of scope (first stage)
 - Multi-account / multi-region, disaster recovery, blue/green deployments.
@@ -98,7 +100,7 @@ flowchart LR
     LS --> PX
     PX --> DB
     LC -->|Week 5| BRA[Bedrock Agent]
-    LS -->|Week 4: embeddings| BR[Bedrock Titan Embeddings]
+    LS -->|Week 4: embeddings via on-demand VPC endpoint, ADR-020| BR[Bedrock<br/>Titan Text Embeddings V2]
     LC & LA & LS & APIGW -.->|JSON logs| CW[CloudWatch Logs]
 ```
 
@@ -108,6 +110,7 @@ Deviations from the curriculum or the challenge diagram:
 |---|---|---|
 | Week 3 title "REST API" | **HTTP API** with native JWT authorizer | G4 and Week 2 say HTTP API; cheaper, native Cognito JWT (ADR-003) |
 | CloudFront "inside a VPC" | CloudFront managed by Amplify Hosting; Lambda, Proxy and RDS in the VPC | CloudFront is a global edge service; decided by the Week 1 build (Q-01 closed) |
+| Week 4 W4-G2: 1536-dimensional vectors | **1024** dimensions, Titan Text Embeddings V2 in eu-west-1 | the only 1536-dim Titan model is not offered in eu-west-1 (NAT + cross-region ≈ $39/month); Titan as named by G7; cheapest (ADR-019, owner 2026-11-18) |
 
 ---
 
@@ -133,7 +136,7 @@ while local tests run on 3.13), deployed as zip files; there is no backend appli
 |---|---|---|---|
 | `admin` | HTTP API | `GET /admin`: paginated users list for the group `admin` (Week 1 `SELECT 1` probe dropped in Week 3) | Week 1 (probe), Week 3 (API) |
 | `chatbot` | HTTP API | `POST /chat`: similarity search, Bedrock Agent | Week 5 |
-| `sync` | EventBridge rule (`UserConfirmed`); direct invoke by the owner (`{"action":"status"\|"migrate"}`) | copy of the user into PostgreSQL, embedding on insert/update (Week 4); applies versioned SQL migrations on the owner's invoke (ADR-017) | Week 3, Week 4 |
+| `sync` | EventBridge rule (`UserConfirmed`); direct invoke by the owner (`{"action":…}`: `status`, `migrate`; Week 4: `embed-missing`, `seed`, `similar` — dispatch in [spec 06](specs/06-users-table-and-migrations.md)) | copy of the user into PostgreSQL, embedding on insert/update (Week 4, [spec 10](specs/10-embeddings.md)); applies versioned SQL migrations on the owner's invoke (ADR-017); seed and similarity check ([spec 11](specs/11-similarity-check.md)) | Week 3, Week 4 |
 | `post-confirmation` | Cognito PostConfirmation trigger | puts `UserConfirmed` on the bus; outside the VPC | Week 3 (ADR-016) |
 
 Source layout, packaging (shared DB helper copied into each zip) and tests: [design/user-sync](design/user-sync.md)
@@ -176,10 +179,13 @@ throttling are deferred to Week 6 (owner, 2026-11-17).
 - Lambda connects **only** to the proxy endpoint, one connection per invocation, opened lazily (not at init).
 - Schema through versioned SQL migrations (ADR-017, [Q-16](RISKS.md#q-16) A); the first schema (users table)
   comes in Week 3.
-- Extension `vector` and the similarity index from Week 4 (ADR-007, [Q-15](RISKS.md#q-15)).
+- Extension `vector` (pgvector 0.8.0 on 14.18), column `users.embedding` and an HNSW index from Week 4 (migration V2,
+  [design/vectorisation](design/vectorisation.md), ADR-019).
 
 ### 3.6 Amazon Bedrock
-- Week 4: embedding model per [Q-15](RISKS.md#q-15) (the curriculum asks for 1536 dimensions). Week 5: Bedrock Agent.
+- Week 4: Titan Text Embeddings V2, 1024 dimensions (ADR-019), called by `sync` through the `bedrock-runtime`
+  interface endpoint that exists only during working sessions (ADR-020, [R-18](RISKS.md#2-risk-register)).
+  Week 5: Bedrock Agent.
   IAM allows `bedrock:InvokeModel` / `InvokeAgent` on exact ARNs, only for the function that needs it.
 
 ---
@@ -214,7 +220,8 @@ EventBridge → Sync Lambda → upsert into `users` ([spec 07](specs/07-user-syn
 
 ### 5.3 Semantic search and NL→SQL (Weeks 4–5)
 Curriculum: query embedding → `ORDER BY embedding <-> $1 LIMIT 5` over `users.embedding`; Bedrock Agent turns a
-query containing "sql" into SQL. Designed when Weeks 4 and 5 are planned.
+query containing "sql" into SQL. Week 4: vectors and the example query run from the sync Test tab
+([design/vectorisation](design/vectorisation.md)); the chat flow is designed when Week 5 is planned.
 
 ---
 
@@ -239,7 +246,7 @@ The SPA reads the caller's identity and role from the access token (`cognito:gro
 
 Week 3 creates `users` (copy of the Cognito profile, key = Cognito `sub`) and the runner's `schema_migrations`;
 columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single home). Week 4 adds `users.embedding`
-([Q-15](RISKS.md#q-15)).
+and its HNSW index (V2, [spec 10](specs/10-embeddings.md)).
 
 ---
 
@@ -292,7 +299,7 @@ columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single hom
 | ADR-004 | Token sent to the API | **Accepted** (2026-11-12) | Access token, not ID token |
 | ADR-005 | Network | **Superseded** by the Week 1 build | (was: isolated subnets only); layout as built, §4 |
 | ADR-006 | Database access | **Accepted** (2026-11-13, revised; [Q-18](RISKS.md#q-18) A) | RDS Proxy, TLS; functions authenticate with IAM auth tokens (no secret in functions) |
-| ADR-007 | Vectors | **Proposed**, challenged by [Q-15](RISKS.md#q-15) | Titan v2, 1024 dims, cosine; HNSW primary, IVFFlat for comparison |
+| ADR-007 | Vectors | **Superseded** by ADR-019 (2026-11-18) | (was: Titan v2, 1024 dims, cosine; HNSW primary, IVFFlat for comparison) |
 | ADR-008 | Migrations | **Superseded** by ADR-017 (2026-11-13) | (was: Flyway in a Java `migrate` function) |
 | ADR-009 | Region | **Decided by the Week 1 build** | `eu-west-1` (Ireland), single region (§4) |
 | ADR-010 | LLM chatbot | **Superseded** by the curriculum (Week 5) | (was: semantic search only, Agent as stretch); Bedrock Agent designed in Week 5 |
@@ -304,6 +311,8 @@ columns: [spec 06](specs/06-users-table-and-migrations.md) §Outputs (single hom
 | ADR-016 | User sync wiring | **Accepted** (2026-11-13, [Q-17](RISKS.md#q-17) A) | PostConfirmation trigger (outside the VPC) → `PutEvents` → custom bus → rule → Sync Lambda |
 | ADR-017 | Migrations | **Accepted** (2026-11-13, [Q-16](RISKS.md#q-16) A; revised 2026-11-16, owner) | Versioned SQL files applied by a Python runner module inside `aws-challenge-sync`, on the owner's direct invoke |
 | ADR-018 | API routes | **Accepted** (2026-11-17, owner) | Routes exactly as in the curriculum diagram: `GET /admin` (users list, group `admin`) and `POST /chat`; no `/api` prefix, no `/api/me` (role from the token) |
+| ADR-019 | Embedding model and vectors | **Accepted** (2026-11-18, owner; [Q-15](RISKS.md#q-15)) | Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`) on Bedrock eu-west-1, 1024 dims (deviation from W4-G2's 1536), normalised; `vector(1024)`, HNSW `vector_l2_ops`, query `<->`; supersedes ADR-007 |
+| ADR-020 | Network path to Bedrock | **Accepted** (2026-11-18, owner; [Q-20](RISKS.md#q-20)) | Interface VPC endpoint `bedrock-runtime` in one private subnet, private DNS, SG 443 from the Lambda SG, **created on demand** per working session; `sync` fails fast without it; no NAT |
 
 **ADR-001 — IaC (Deferred).** Week 1 was built in the console and Week 2 is built by the owner from console runbooks
 (Q-12 C; agents have no AWS access, so IaC code will be deployed by the owner too). A dedicated task (T00-03) codifies the existing resources once the tool is chosen in
@@ -373,9 +382,32 @@ before); `/admin` is both an SPA page and an API path on different hosts (no con
 ("routes under `/api`") is superseded; the API access log and stage throttling (S8, ARCHITECTURE §3.3) move to Week 6
 (owner, 2026-11-17). Detail: [design/admin-api](design/admin-api.md).
 
-**ADR-007 — Vectors (Proposed).** 1024 is Titan v2's maximum; HNSW needs no training step; IVFFlat needs data before
-building and is kept for the comparison. Challenged by the Week 4 curriculum (1536 dimensions, `<->` operator) —
-[Q-15](RISKS.md#q-15), decided when Week 4 is planned.
+**ADR-007 — Vectors (Superseded by ADR-019, 2026-11-18).** Was: Titan v2, 1024 dims (its maximum), cosine; HNSW
+primary, IVFFlat for comparison. Challenged by the Week 4 curriculum (1536 dimensions, `<->` operator); ADR-019 keeps
+its model and dimension and replaces the distance (L2 on normalised vectors) and the index choice (HNSW only).
+
+**ADR-019 — Embedding model and vector settings (Accepted 2026-11-18, owner; Q-15 c).** *Context:* the curriculum
+asks for 1536-dimensional vectors from "Titan Embeddings or Claude 3.5 Sonnet" and the query `<->`; G7 names Titan
+Text Embeddings; Claude produces no embeddings; Titan G1 Text (the only 1536-dim Titan) is not offered in eu-west-1;
+the owner's priority is the lowest cost. *Decision:* Amazon Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`)
+on Bedrock in eu-west-1, in-region, `dimensions` **1024**, `normalize` true (unit length, so L2 ranks like cosine);
+`users.embedding vector(1024)`, HNSW `vector_l2_ops` (buildable on an empty table); the curriculum query `<->`. **This
+deviates from W4-G2 (1536) on purpose** (§2 deviations). 1024 equals the value ADR-007 originally proposed.
+*Alternatives:* Cohere Embed v4 at 1536 in eu-west-1 (meets 1536, but not Titan, third-party Marketplace model);
+Titan G1 1536 in eu-central-1 (cross-region, needs a NAT gateway ≈ $39/month); IVFFlat (needs data before the build).
+*Consequences:* one text per `InvokeModel` call (1000 rows = 1000 calls, ≈ $0.001); no Marketplace step;
+re-embedding needed if the model or the text template changes. Detail: [design/vectorisation](design/vectorisation.md).
+
+**ADR-020 — Network path to Bedrock (Accepted 2026-11-18, owner; Q-20 A on demand).** *Context:* the private subnets
+have no egress (R-09); `sync` (Week 4) and `chatbot` (Week 5) call Bedrock; the owner's priority is the lowest cost.
+*Decision:* one interface endpoint `com.amazonaws.eu-west-1.bedrock-runtime` in one private subnet, private DNS on,
+own security group (kept permanently, free) with TCP 443 from the Lambda security group; the **endpoint is created by
+the owner for a working session and deleted afterwards** (≈ $0.011/h). Without it, `sync` fails fast (short connect
+timeout, one attempt), stores the row with `embedding` NULL and does not raise; `embed-missing` fills the gaps in the
+next session. *Alternatives:* the same endpoint always on (≈ $8/month); NAT gateway (≈ $39/month, any region);
+embedding outside the VPC in `post-confirmation` (contradicts S2, 5 s Cognito limit). *Consequences:* cents per month;
+vectors of users confirmed between sessions arrive late ([R-18](RISKS.md#2-risk-register)); in-region models only;
+Bedrock Agent (Week 5) needs its own endpoint. Detail: [design/vectorisation](design/vectorisation.md) §2, §4.
 
 **ADR-012 — Logs (Proposed).** Week 6 names Powertools Logger and Lambda advanced logging controls (ALC). To confirm
 then: how ALC JSON format combines with Powertools JSON without double wrapping ([R-10](RISKS.md#2-risk-register)).
@@ -424,6 +456,6 @@ tests and migrations are decided with the first schema (ADR-017).
 | G3 | Cognito, Amplify Auth | Week 2 — [spec 04](specs/04-user-registration-and-sign-in.md); Week 3 — user copy in PostgreSQL ([spec 07](specs/07-user-sync.md)) | sign-up → owner confirms → sign-in → tokens in SPA → personal page; Week 3: confirmed user → row in `users` |
 | G4 | HTTP API, JWT authorizer, Lambda in VPC | Week 1 (Lambda in VPC, [spec 02](specs/02-database-connectivity.md)); Week 2 — [spec 05](specs/05-protected-api.md); Week 3 — [spec 08](specs/08-admin-api.md), [spec 09](specs/09-admin-page-and-role.md) | Week 2: no/invalid token → 401, valid access token passes the authorizer; Week 3: admin's access token on `GET /admin` → 200, non-admin → 403 |
 | G5 | RDS Proxy, RDS | Week 1 — [spec 02](specs/02-database-connectivity.md); Week 3 — [spec 06](specs/06-users-table-and-migrations.md), [spec 08](specs/08-admin-api.md) | Lambda connects only to the proxy endpoint (Week 3: IAM auth, no secret in the function) |
-| G6 | pgvector, HNSW / IVFFlat | Week 4 | similarity query uses the index; latency on 1000 records recorded |
-| G7 | Bedrock embeddings | Week 4 ([Q-15](RISKS.md#q-15)) | embedding computed by the Sync Lambda on insert/update |
+| G6 | pgvector, HNSW / IVFFlat | Week 4 — [spec 10](specs/10-embeddings.md), [spec 11](specs/11-similarity-check.md) | similarity query uses the index; latency on 1000 records recorded |
+| G7 | Bedrock embeddings | Week 4 — [spec 10](specs/10-embeddings.md) (Titan Text Embeddings V2, 1024 dims — ADR-019) | embedding computed by the Sync Lambda on insert/update |
 | G8 | CloudWatch, JSON logs, X-Ray | Week 1 (log groups); Week 3 (API access log, handler log lines — [spec 07](specs/07-user-sync.md), [spec 08](specs/08-admin-api.md)); Week 6 | one request traced by `apiRequestId` through API GW → Lambda → DB/Bedrock |

@@ -111,6 +111,19 @@ Source: the owner's console screenshots, 2026-11-17.
 | `aws-challenge-sync` | 256 MB, 60 s, env `DB_PROXY_ENDPOINT`/`DB_NAME=postgres`/`DB_USER=postgres`; role adds inline `aws-challenge-sync-rds-connect` (`rds-db:connect` on `prx-019d0caac664f7be9/postgres`); schema V1 applied 2026-11-16 |
 | Back-fill | not done (owner, 2026-11-17): users confirmed before the trigger are not in `users` |
 
+## Vectorisation (Week 4, T04-01 / T04-03)
+
+Source: the owner's console screenshots and statements, 2026-11-18 and 2026-11-25.
+
+| Item | Value |
+|---|---|
+| Embedding model | Amazon Titan Text Embeddings V2, `amazon.titan-embed-text-v2:0`, eu-west-1, Serverless, 1024 dims (ADR-019) |
+| `aws-challenge-sync` role | adds inline `aws-challenge-sync-bedrock-invoke` (`bedrock:InvokeModel` on the model ARN) |
+| Endpoint security group | `aws-challenge-vpce-sg` (id not reported): inbound HTTPS 443 from `sg-09356f785149eeb60`, no outbound |
+| Bedrock endpoint | `com.amazonaws.eu-west-1.bedrock-runtime`, Interface, subnet `aws-challenge-subnet-private1-eu-west-1a`, SG `aws-challenge-vpce-sg`, private DNS — **created on demand per session and deleted afterwards** (ADR-020); none exists between sessions |
+| Database | V2 applied 2026-11-18: extension `vector` (pgvector 0.8.0), `users.embedding vector(1024)`, HNSW index `users_embedding_hnsw_idx`; 1000 synthetic seed users (`seed.invalid` e-mails); all 1002 rows embedded 2026-11-25 |
+| Other endpoints in the account | `vpce-01b735f7b9418cac4` (Interface, `vpce-svc-0aa43e6…`) — not part of this project: the account is a shared corporate account and the endpoint predates the project (owner, 2026-11-25); never touch it. `aws-challenge-vpce-s3` (Gateway) belongs to the project VPC |
+
 ## Not recorded yet
 
 Supplied by the owner when a task needs them: DB instance security groups (Connectivity & security → Security section), function memory/timeout/role, Amplify app id.

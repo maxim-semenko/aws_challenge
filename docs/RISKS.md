@@ -1,7 +1,7 @@
 # RISKS.md — Open Decisions and Risk Register
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [PLAN.md](PLAN.md) · [design/](design/) · [tasks/](tasks/)
-Last updated: 2026-11-16
+Last updated: 2026-11-18
 
 This file has two registers:
 
@@ -26,8 +26,6 @@ This file has two registers:
 | ID | Decision needed | Recommendation | Owner | Status | Blocks |
 |---|---|---|---|---|---|
 | [Q-02](#q-02) | Infrastructure-as-Code tool for the later IaC task | AWS CDK in Python | OWNER + ARCH | Open (deferred by Q-12 C) | T00-03 |
-| [Q-05](#q-05) | Chatbot data: what the search runs over | users table per the Week 4 curriculum | OWNER | Deferred (Week 4) | — |
-| [Q-15](#q-15) | Vector dimension and model: 1536 (Week 4 curriculum) vs 1024 (ADR-007) | decide when Week 4 is planned | OWNER + ARCH | Open (Week 4, not blocking now) | — |
 
 ### <a id="q-02"></a>Q-02 — IaC tool
 
@@ -43,22 +41,6 @@ runs the IaC tool's deploy/import commands.
 | Terraform | industry standard, `import` blocks | second configuration language (HCL), more boilerplate |
 | AWS SAM | simple for Lambda | weak for VPC/RDS/Proxy and Cognito details |
 
-### <a id="q-05"></a>Q-05 — Chatbot data
-
-Originally: which documents the chatbot searches. The Week 4 curriculum stores embeddings in `users.embedding` and
-Week 5 asks for "users similar to …", so the search most likely runs over users. Confirm or reopen when Week 4 is
-planned (the ≥ 1000-record latency check needs a test dataset of users).
-
-### <a id="q-15"></a>Q-15 — Vector dimension and embedding model (Week 4)
-
-Raised 2026-11-12 from the Week 4 curriculum: "1536-dimensional vectors", `ORDER BY embedding <-> $1` (L2 distance),
-"Bedrock Titan Embeddings (or Claude 3.5 Sonnet)". ADR-007 (Proposed) has Titan Text Embeddings v2, 1024 dimensions,
-cosine distance. Facts to verify when Week 4 is planned: Titan Text Embeddings v2 outputs 256/512/1024 dimensions;
-1536 is the fixed output of the older Titan Embeddings G1 – Text (v1); Claude models do not produce embeddings.
-Options: (a) follow the curriculum — Titan G1 Text, `vector(1536)`, `<->`; (b) keep ADR-007 — Titan v2, 1024, cosine,
-deviation noted; (c) Titan v2 1024 with `<->` on normalised vectors (same ranking as cosine). Model availability per
-region: [R-05](#2-risk-register). Not blocking until Week 4.
-
 ---
 
 ## 2. Risk register
@@ -68,9 +50,10 @@ Scale: Likelihood / Impact — Low · Medium · High.
 | ID | Risk | L | I | Mitigation | Watched by | Status |
 |---|---|---|---|---|---|---|
 | R-02 | A synchronous Cognito trigger in the sync chain times out (5 s hard limit) on a cold start → confirmation fails | Medium | High | Q-17 A: the trigger is outside the VPC, only `boto3` + one `PutEvents`, never raises on a `PutEvents` failure (logs it, returns the event; R-11 re-sync); memory 256 MB; cold-start duration recorded by T03-05 (AC-07.4) | T03-04, T03-05 | Open |
-| R-05 | The embedding model required in Week 4 is unavailable or not enabled in the region of the build | Medium | High | Check model access in the Bedrock console when Week 4 is planned ([Q-15](#q-15)) | Week 4 planning | Open |
-| R-06 | Cost of the idle environment (RDS, RDS Proxy, NAT if any) — figures in [backend-foundation](design/backend-foundation.md) §Cost; a manually built environment cannot be removed and recreated cheaply | High | Medium | AWS Budgets alert (T00-01); stop the RDS instance when idle; record every change as a console runbook; IaC task T00-03 | owner | Open |
-| R-09 | No outbound path from the private subnets: the owner's VPC network map (2026-11-12, [ARCHITECTURE §4](ARCHITECTURE.md#4-network)) shows no NAT gateway (curriculum Week 1 S3 asked for one) and only an S3 gateway endpoint, so calls from private-subnet Lambdas to Secrets Manager, Cognito, EventBridge or Bedrock time out. Not a Week 2 blocker: Week 2 adds no Lambda code (spec 05, reduced 2026-11-13). Open point: the Week 1 `admin` probe reads the DB secret from Secrets Manager — if it works, either a NAT/interface endpoint exists after all, or the function is not in the private subnets, or it does not read Secrets Manager | Medium | Medium | Week 3: [Q-18](#q-18) A (IAM auth to the proxy needs no egress) together with Q-17 A (event carries the attributes; the trigger runs outside the VPC); the open point is answered by the owner facts F1–F5 collected in step 1 of the T03-03 runbook. Week 4–5 (Bedrock): NAT vs interface endpoint decided when Week 4 is planned; every new AWS dependency of a VPC Lambda checked by ARCH | owner, T03-03, Week 4 planning | Open |
+| R-06 | Cost of the idle environment (RDS, RDS Proxy, NAT if any) — figures in [backend-foundation](design/backend-foundation.md) §Cost; a manually built environment cannot be removed and recreated cheaply | High | Medium | AWS Budgets alert (T00-01); stop the RDS instance when idle; Bedrock interface endpoint only during working sessions (ADR-020); record every change as a console runbook; IaC task T00-03 | owner | Open |
+| R-09 | No outbound path from the private subnets: the owner's VPC network map (2026-11-12, [ARCHITECTURE §4](ARCHITECTURE.md#4-network)) shows no NAT gateway (curriculum Week 1 S3 asked for one) and only an S3 gateway endpoint, so calls from private-subnet Lambdas to Secrets Manager, Cognito, EventBridge or Bedrock time out. Not a Week 2 blocker: Week 2 adds no Lambda code (spec 05, reduced 2026-11-13). Open point: the Week 1 `admin` probe reads the DB secret from Secrets Manager — if it works, either a NAT/interface endpoint exists after all, or the function is not in the private subnets, or it does not read Secrets Manager | Medium | Medium | Week 3: [Q-18](#q-18) A (IAM auth to the proxy needs no egress) together with Q-17 A (event carries the attributes; the trigger runs outside the VPC); the open point is answered by the owner facts F1–F5 collected in step 1 of the T03-03 runbook. Week 4–5 (Bedrock): [Q-20](#q-20) A — `bedrock-runtime` interface endpoint created on demand (ADR-020; consequences in R-18); every new AWS dependency of a VPC Lambda checked by ARCH | owner, T03-03, T04-01 | Open |
+| R-18 | The `bedrock-runtime` endpoint exists only during working sessions (ADR-020): users confirmed while it is absent get `embedding` NULL (not found by similarity search until back-filled); a forgotten endpoint costs ≈ $8/month; Week 5's `chatbot` needs it for every query | High | Low | `sync` fails fast and never raises on a Bedrock error (spec 10); every Week 4+ runbook that needs Bedrock starts with "create endpoint", runs `embed-missing`, and ends with "delete endpoint" (T04-01 procedure); AWS Budgets alert (T00-01) | T04-01, T04-03, Week 5 planning | Open |
+| R-17 | The 1000 synthetic users of the Week 4 latency check (spec 11) sit in `users` next to real users: they appear in the admin table and in Week 5 similarity results | High | Low | Fictitious values only, e-mail domain `seed.invalid` (identifiable, never deliverable), deterministic ids; kept on purpose for Week 5; removal (a `DELETE … WHERE email LIKE '%@seed.invalid'` action) only as a later task if the owner wants it | T04-03, Week 5 planning | Open |
 | R-10 | Double-wrapped or unparsable logs when Lambda advanced logging (JSON) meets Powertools JSON | Medium | Low | Spike in Week 6 before standardising (ADR-012); until then one stdlib JSON line per invocation | Week 6 planning | Open |
 | R-11 | The user is `CONFIRMED` in Cognito but the copy in PostgreSQL is missing or late (sync failure, asynchronous chain) | Medium | Medium | Designed in Week 3 ([design/user-sync](design/user-sync.md), spec 07): idempotent upsert by `sub`; unparsable values stored as NULL, out-of-range values stored as is; the trigger never blocks confirmation; Lambda async retries; re-sync runbook (owner sends the event from the EventBridge console); users confirmed before the trigger existed are back-filled by the same runbook. With Q-19 A the personal page does not read the copy | T03-04, T03-05 | Open |
 | R-12 | The SPA is the only validation of registration values (Q-14 C): a direct call to the public `SignUp` or `UpdateUserAttributes` API (the app client must allow writing the attributes for `SignUp`) can store out-of-range or missing values; later also drift against the PostgreSQL copy | Low | Low | Accepted for Week 2 (no edit feature). Week 3 (proposed in design/user-sync): attribute changes are **not** synced (only confirmation is an event; Cognito has no attribute-change trigger); the admin table may drift from Cognito until a re-sync; revisit if editing is ever added | T02-01, T03-04 | Open |
@@ -85,6 +68,10 @@ Scale: Likelihood / Impact — Low · Medium · High.
 
 | ID | Resolution | Date | Decided by |
 |---|---|---|---|
+| <a id="q-15"></a>Q-15 | Embedding model — option c: **Amazon Titan Text Embeddings V2** (`amazon.titan-embed-text-v2:0`) in eu-west-1, in-region, **dimension 1024**, normalised output; column `vector(1024)`. **Deliberate deviation from W4-G2 (1536):** the only 1536-dim Titan model (Titan Embeddings G1 – Text) is not offered in eu-west-1 and would need a NAT gateway plus a cross-region call (≈ $39/month); the curriculum goal G7 names Titan, and V2 is the cheapest model with no Marketplace subscription. Rejected: Cohere Embed v4 at 1536 (third-party, not Titan), Titan G1 in eu-central-1 (NAT). Recorded as ADR-019 (Accepted; supersedes ADR-007, whose original value — Titan V2, 1024 — it matches); options in [design/vectorisation](design/vectorisation.md) §Alternatives. T04-01, T04-02, T04-03 unblocked | 2026-11-18 | OWNER |
+| <a id="q-20"></a>Q-20 | Network path to Bedrock — option A, **on demand**: interface endpoint `com.amazonaws.eu-west-1.bedrock-runtime` in one private subnet (private DNS, own SG with TCP 443 from the Lambda SG), created by the owner for a working session and deleted afterwards (≈ $0.011/h instead of ≈ $8/month); while it is absent `sync` fails fast, stores the row with `embedding` NULL and does not raise; `embed-missing` fills the gaps later (R-18). Rejected: NAT gateway (≈ $39/month), embedding in `post-confirmation` (contradicts S2). Recorded as ADR-020 (Accepted). T04-01, T04-03 unblocked | 2026-11-18 | OWNER |
+| R-05 | Closed by Q-15 (2026-11-18): the chosen model, Titan Text Embeddings V2, is offered in-region in eu-west-1; the owner confirms access and the model id in T04-01 | 2026-11-18 | OWNER |
+| <a id="q-05"></a>Q-05 | Answered by the curriculum (Week 4): embeddings are stored in `users.embedding`, so the search runs over the users table (Week 5); the ≥ 1000-record test dataset is seeded by the `seed` action of spec 11 | 2026-11-17 | OWNER (curriculum) |
 | R-07 | Closed: RDS Proxy supports RDS for PostgreSQL 10–18 (AWS docs checked), so it does not limit the version choice | 2026-11-05 | ARCH |
 | <a id="q-01"></a>Q-01 | Decided by the Week 1 build: the CloudFront distribution managed by Amplify Hosting; "isolated VPC" refers to the backend. Proof by response headers (AC-01.1); Amplify app id/domain not recorded yet (ARCHITECTURE §4) | 2026-11-12 | OWNER |
 | <a id="q-03"></a>Q-03 | Decided by the Week 1 build: `eu-west-1` (ADR-009, ARCHITECTURE §4) | 2026-11-12 | OWNER |

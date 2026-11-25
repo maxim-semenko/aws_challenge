@@ -29,7 +29,7 @@ decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (Week 3 — REST API + data — closed 2026-11-17; next: Week 4, not planned yet).
+planned** (Week 4 — data vectorisation — closed 2026-11-25; next: Week 5, not planned yet).
 
 ## 3. Working rules (mandatory)
 
@@ -60,7 +60,7 @@ planned** (Week 3 — REST API + data — closed 2026-11-17; next: Week 4, not p
 | Server code | Python 3.12 AWS Lambda functions `admin`, `chatbot`, `sync` (also applies the SQL migrations, ADR-017), `post-confirmation` (ADR-016), zip deploys, one directory per function under `lambdas/`; no backend application (ADR-015) | accepted |
 | Lambda libraries | `boto3` (runtime), `pg8000`, Powertools for AWS Lambda (Python) Logger from Week 6, `pytest` | proposed in ADR-015 |
 | AWS SDK | `boto3` in Lambdas; JS SDK v3 only through `aws-amplify` | accepted |
-| Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, dimension per ADR-007 / Q-15; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
+| Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, `vector(1024)`, Titan V2, ADR-019; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
 | Frontend | React 19, Vite 6, TypeScript 5.8 strict, React Router 7, TanStack Query 5, `aws-amplify` 6 — Vite SPA, no Next.js / Server Components; npm (Gradle Wrapper 9.8.2 only wraps the npm scripts in `frontend/build.gradle`) | accepted |
 | AWS changes | made by the owner in the AWS console from a devops console runbook in the task (§3.11, Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (console runbooks); IaC pending Q-02 |
 | Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
@@ -164,7 +164,7 @@ Spring Cloud, replication) were removed, the rest is kept as is.
 - Python 3.12 Lambda functions as zip deploys (ADR-015) — no backend application, containers, Kubernetes or GitOps.
 - Agents never access AWS (§3.11): every `aws ...` CLI/SDK example in a skill is reference only; AWS changes are
   console runbooks executed by the owner (Q-12 C); IaC per Q-02 later; Terraform advice applies only if Q-02 chooses it.
-- Vite SPA without Server Components; vector dimension per ADR-007 / Q-15; secrets in Secrets Manager.
+- Vite SPA without Server Components; vector dimension per ADR-019; secrets in Secrets Manager.
 - Learning setup: single region, single AZ where cheaper, no DR/RTO/RPO targets, no staging environment unless Q-07
   says otherwise; no PR/change-ticket flow until a CI task introduces it.
 - Tests: pytest for Lambdas; the examples in `test-master` and `postgres-pro` are for method only.

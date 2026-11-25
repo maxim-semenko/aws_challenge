@@ -8,7 +8,10 @@ Written against [Q-17](../RISKS.md#q-17) option A and [Q-18](../RISKS.md#q-18) o
 owner on 2026-11-13 (ADR-016, ADR-006 revised). Revised 2026-11-16 (owner): `aws-challenge-sync` also hosts the
 migration runner, so its handler first routes the event (dispatch table: [spec 06](06-users-table-and-migrations.md)
 §Inputs); runtime Python 3.12 (ADR-015 revised). No AC changed. 2026-11-16 (ARCH review T03-04): sync function
-error strings added to §Outputs; no AC changed.
+error strings added to §Outputs; no AC changed. 2026-11-17 (Week 4 planning; design vectorisation Accepted
+2026-11-18): the upsert also writes `users.embedding`; a Bedrock failure only stores NULL and is logged (no function
+error, return value unchanged); the log line gains `embedding`, `bedrockMs`, `errorClass` — single home
+[spec 10](10-embeddings.md); no AC of this spec changed.
 
 ## Purpose
 

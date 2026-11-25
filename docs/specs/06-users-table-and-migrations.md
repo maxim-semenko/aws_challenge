@@ -8,7 +8,8 @@ Written against [Q-16](../RISKS.md#q-16) option A and [Q-18](../RISKS.md#q-18) o
 owner on 2026-11-13 (ADR-017, ADR-006 revised). **Revised 2026-11-16 (owner):** no function `aws-challenge-migrate`;
 the runner is a module of `aws-challenge-sync` (ADR-017 revised, Q-16 amended); runtime Python 3.12 (ADR-015
 revised). Runner rules, results, error strings and tables are unchanged; AC-06.1, AC-06.2, AC-06.4, AC-06.5, AC-06.6
-reworded.
+reworded. **2026-11-17 (Week 4 planning; design vectorisation Accepted 2026-11-18):** dispatch table gains the
+vector actions; column `embedding` added to the column list (V2); no Week 3 AC changed (AC-06.1 still checks V1 only).
 
 ## Purpose
 
@@ -27,7 +28,8 @@ connection:
 
 | Event | Route |
 |---|---|
-| a JSON object with a top-level key `action` | migration runner (below) |
+| a JSON object whose top-level `action` is `embed-missing`, `seed` or `similar` (Week 4) | vector actions — [spec 10](10-embeddings.md) (`embed-missing`), [spec 11](11-similarity-check.md) (`seed`, `similar`) |
+| any other JSON object with a top-level key `action` | migration runner (below) |
 | `source` = `aws-challenge.cognito` and `detail-type` = `UserConfirmed` | user upsert ([spec 07](07-user-sync.md)) |
 | anything else | function error `UNSUPPORTED_EVENT` (see Outputs) |
 
@@ -69,9 +71,10 @@ No `DB_SECRET_ARN`, password or connection string with credentials. Port fixed 5
 | `confirmed_at` | `timestamptz` | yes | — | event `confirmedAt` |
 | `created_at` | `timestamptz` | no | `now()` | set on insert only |
 | `updated_at` | `timestamptz` | no | `now()` | set on every upsert |
+| `embedding` | `vector(1024)` | yes | — | added by `V2__add_users_embedding.sql` (Week 4, [spec 10](10-embeddings.md); Titan Text Embeddings V2, ADR-019) |
 
-No CHECK constraint on registration values, no unique constraint on `email`, no other index, no `embedding` column
-(Week 4, Q-15).
+No CHECK constraint on registration values, no unique constraint on `email`. V1 creates no index besides the primary
+key; V2 adds the extension `vector` and the index `users_embedding_hnsw_idx` (`hnsw`, `vector_l2_ops`) — spec 10.
 
 **Table `schema_migrations`**: `version integer PRIMARY KEY`, `description text NOT NULL`, `checksum text NOT NULL`
 (lower-case hex SHA-256 of the file bytes), `applied_at timestamptz NOT NULL DEFAULT now()`. Created by the runner if
