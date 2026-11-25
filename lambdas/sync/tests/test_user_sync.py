@@ -1,4 +1,5 @@
-"""Unit tests of the UserConfirmed upsert of aws-challenge-sync (spec 07 §Outputs, §Edge Cases; AC-07.2)."""
+"""Unit tests of the UserConfirmed upsert of aws-challenge-sync (spec 07 §Outputs, §Edge Cases; AC-07.2) and of its
+embedding step (spec 10 §Behaviour 2-3; AC-10.2). Bedrock is the StubBedrock double (autouse fixture)."""
 
 import copy
 import json
@@ -8,8 +9,10 @@ import pg8000.native
 import pytest
 
 import db
+import embeddings
 import lambda_function
 import user_sync
+from bedrock_stub import StubBedrock, install, unit_vector
 
 SUB = "8f1c2a3b-0000-4000-8000-000000000001"
 EMAIL = "Person@Example.com"
@@ -51,14 +54,17 @@ class Context:
 class FakeConnection:
     """pg8000.native.Connection double holding the users table as a dict keyed by id."""
 
-    def __init__(self, rows=None, error=None):
+    def __init__(self, rows=None, error=None, log=None):
         self.rows = rows if rows is not None else {}
         self.error = error
         self.calls = []
         self.closed = False
+        self.log = log
 
     def run(self, sql, **params):
         self.calls.append((sql, params))
+        if self.log is not None:
+            self.log.append("sql")
         if self.error is not None:
             raise self.error
         assert sql == user_sync.SQL_UPSERT
@@ -68,6 +74,14 @@ class FakeConnection:
 
     def close(self):
         self.closed = True
+
+
+@pytest.fixture(autouse=True)
+def bedrock(monkeypatch):
+    return install(monkeypatch, StubBedrock())
+
+
+UNIT_LITERAL = embeddings.to_vector_literal(unit_vector())
 
 
 @pytest.fixture
@@ -133,6 +147,7 @@ def test_full_event_is_inserted_with_every_mapped_column(conn, capsys):
         "height_cm": 170,
         "weight_kg": 62,
         "confirmed_at": datetime(2026, 11, 16, 10, 0, 0, 123000, tzinfo=timezone.utc),
+        "embedding": UNIT_LITERAL,
     }
     assert len(conn.calls) == 1
     assert conn.connects == [{}]  # shared default socket timeout (10 s)
@@ -149,8 +164,11 @@ def test_full_event_is_inserted_with_every_mapped_column(conn, capsys):
         "outcome": "inserted",
         "invalidFields": [],
         "durationMs": line["durationMs"],
+        "embedding": "stored",
+        "bedrockMs": line["bedrockMs"],
     }
     assert isinstance(line["durationMs"], int)
+    assert isinstance(line["bedrockMs"], int)
     assert_no_values_logged(line)
 
 
@@ -276,7 +294,7 @@ def test_unknown_keys_are_ignored(conn):
     event = event_with({"extra": "x"}, attribute_changes={"email_verified": "true", "custom:other": "y"})
     assert invoke(event) == {"outcome": "inserted"}
     assert set(conn.rows[SUB]) == {"id", "email", "given_name", "family_name", "gender", "birthdate", "country",
-                                   "height_cm", "weight_kg", "confirmed_at"}
+                                   "height_cm", "weight_kg", "confirmed_at", "embedding"}
 
 
 # --- idempotency ------------------------------------------------------------------------------------------------
@@ -298,7 +316,7 @@ def test_upsert_overwrites_registration_columns_and_updated_at_but_keeps_created
     assert "ON CONFLICT (id) DO UPDATE SET" in sql
     update = sql.split("DO UPDATE SET")[1]
     for column in ("email", "given_name", "family_name", "gender", "birthdate", "country", "height_cm", "weight_kg",
-                   "confirmed_at"):
+                   "confirmed_at", "embedding"):
         assert f"{column} = EXCLUDED.{column}" in update
     assert "updated_at = now()" in update
     assert "created_at" not in sql
@@ -321,8 +339,9 @@ def test_upsert_overwrites_registration_columns_and_updated_at_but_keeps_created
         ({"email": ["a@b.c"]}, "email", SUB),
     ],
 )
-def test_bad_sub_or_email_is_rejected_without_db_call(changes, field, logged_sub, no_connect, capsys):
+def test_bad_sub_or_email_is_rejected_without_db_call(changes, field, logged_sub, no_connect, bedrock, capsys):
     assert invoke(event_with(changes)) == {"outcome": "rejected"}
+    assert bedrock.calls == []
 
     line = log_line(capsys)
     assert line["outcome"] == "rejected"
@@ -330,6 +349,7 @@ def test_bad_sub_or_email_is_rejected_without_db_call(changes, field, logged_sub
     assert line["invalidFields"] == [field]
     assert line["userSub"] == logged_sub
     assert "errorClass" not in line
+    assert "embedding" not in line and "bedrockMs" not in line
     assert_no_values_logged(line, extra=["not-a-uuid"])
 
 
@@ -422,6 +442,122 @@ def test_sql_contains_no_value_and_every_value_is_a_parameter(conn):
                   "Austria", "170", "62", "2026-11-16"]:
         assert value not in sql
     assert set(params) == {"id", "email", "given_name", "family_name", "gender", "birthdate", "country",
-                           "height_cm", "weight_kg", "confirmed_at"}
+                           "height_cm", "weight_kg", "confirmed_at", "embedding"}
+    assert "CAST(:embedding AS vector)" in sql
+    assert "0.0," not in sql  # the vector is a parameter, never in the SQL text
     for name in params:
         assert f":{name} " in sql or f":{name})" in sql
+
+
+# --- embedding on upsert (spec 10 §Behaviour 2-3, §Edge Cases; AC-10.2) -----------------------------------------
+
+from botocore.exceptions import ClientError, ConnectTimeoutError, ReadTimeoutError  # noqa: E402
+
+EMBEDDING_TEXT = "gender: female; birth year: 1990; country: Austria; height: 170 cm; weight: 62 kg"
+
+
+def test_text_of_the_mapped_row_is_sent_to_bedrock_once(conn, bedrock):
+    invoke(copy.deepcopy(EVENT))
+    (call,) = bedrock.calls
+    assert json.loads(call["body"])["inputText"] == EMBEDDING_TEXT
+
+
+def test_bedrock_is_called_before_the_db_connection(monkeypatch):
+    order = []
+    install(monkeypatch, StubBedrock(log=order))
+    connection = FakeConnection(log=order)
+
+    def connect(**kwargs):
+        order.append("connect")
+        return connection
+
+    monkeypatch.setattr(db, "connect", connect)
+    invoke(copy.deepcopy(EVENT))
+    assert order == ["bedrock", "connect", "sql"]
+
+
+def test_row_without_any_text_field_is_skipped_without_bedrock_call(conn, bedrock, capsys):
+    event = event_with(drop=["gender", "birthdate", "custom:country", "custom:height", "custom:weight"])
+    assert invoke(event) == {"outcome": "inserted"}
+    assert bedrock.calls == []
+    assert conn.rows[SUB]["embedding"] is None
+    line = log_line(capsys)
+    assert (line["embedding"], line["bedrockMs"]) == ("skipped", 0)
+    assert "errorClass" not in line
+
+
+def test_invalid_values_are_not_part_of_the_text(conn, bedrock):
+    invoke(event_with(attribute_changes={"birthdate": "2000-02-31", "custom:height": "abc"}))
+    text = json.loads(bedrock.calls[0]["body"])["inputText"]
+    assert text == "gender: female; country: Austria; weight: 62 kg"
+
+
+@pytest.mark.parametrize(
+    "exception, error_class",
+    [
+        (ConnectTimeoutError(endpoint_url="https://bedrock-runtime.eu-west-1.amazonaws.com"), "UNREACHABLE"),
+        (ReadTimeoutError(endpoint_url="https://bedrock-runtime.eu-west-1.amazonaws.com"), "TIMEOUT"),
+        (ClientError({"Error": {"Code": "ThrottlingException", "Message": "x"}}, "InvokeModel"),
+         "ThrottlingException"),
+        (ClientError({"Error": {"Code": "AccessDeniedException", "Message": "x"}}, "InvokeModel"),
+         "AccessDeniedException"),
+        (RuntimeError(f"boom {EMAIL}"), "RuntimeError"),
+    ],
+)
+def test_bedrock_failure_upserts_null_returns_normally_and_logs_failed(exception, error_class, monkeypatch, conn,
+                                                                       capsys):
+    install(monkeypatch, StubBedrock(outcomes=[exception]))
+
+    assert invoke(copy.deepcopy(EVENT)) == {"outcome": "inserted"}  # no exception, no async retry
+
+    assert conn.rows[SUB]["embedding"] is None
+    assert conn.rows[SUB]["email"] == "person@example.com"  # the row is never lost to Bedrock
+    assert conn.closed
+    line = log_line(capsys)
+    assert line["outcome"] == "inserted" and line["level"] == "INFO"
+    assert (line["embedding"], line["errorClass"]) == ("failed", error_class)
+    assert isinstance(line["bedrockMs"], int)
+    assert_no_values_logged(line)
+
+
+def test_bad_response_vector_is_failed_with_null(monkeypatch, conn, capsys):
+    install(monkeypatch, StubBedrock(default=[0.0] * 1024))
+    assert invoke(copy.deepcopy(EVENT)) == {"outcome": "inserted"}
+    assert conn.rows[SUB]["embedding"] is None
+    line = log_line(capsys)
+    assert (line["embedding"], line["errorClass"]) == ("failed", "BAD_RESPONSE")
+
+
+def test_resync_overwrites_the_vector_and_failed_resync_sets_null(monkeypatch, conn, capsys):
+    install(monkeypatch, StubBedrock(default=unit_vector(5)))
+    assert invoke(copy.deepcopy(EVENT)) == {"outcome": "inserted"}
+    assert conn.rows[SUB]["embedding"] == embeddings.to_vector_literal(unit_vector(5))
+
+    install(monkeypatch, StubBedrock(default=unit_vector(7)))
+    assert invoke(copy.deepcopy(EVENT)) == {"outcome": "updated"}
+    assert conn.rows[SUB]["embedding"] == embeddings.to_vector_literal(unit_vector(7))
+
+    install(monkeypatch, StubBedrock(outcomes=[ConnectTimeoutError(endpoint_url="https://x")]))
+    assert invoke(copy.deepcopy(EVENT)) == {"outcome": "updated"}
+    assert conn.rows[SUB]["embedding"] is None  # no stale vector survives a failed re-sync
+
+
+def test_db_error_after_bedrock_failure_still_raises_with_db_error_class(monkeypatch, capsys):
+    install(monkeypatch, StubBedrock(outcomes=[ConnectTimeoutError(endpoint_url="https://x")]))
+    error = pg8000.native.DatabaseError({"S": "ERROR", "C": "42P01", "M": "relation"})
+    monkeypatch.setattr(db, "connect", lambda **kwargs: FakeConnection(error=error))
+
+    with pytest.raises(user_sync.UserSyncError, match="^USER_SYNC_FAILED: 42P01$"):
+        invoke(copy.deepcopy(EVENT))
+
+    line = log_line(capsys)
+    assert (line["outcome"], line["embedding"], line["errorClass"]) == ("failure", "failed", "DatabaseError")
+
+
+def test_log_line_has_no_text_or_vector(monkeypatch, conn, capsys):
+    install(monkeypatch, StubBedrock(default=[0.123456789] * 1024))
+    invoke(copy.deepcopy(EVENT))
+    text = json.dumps(log_line(capsys))
+    assert "0.123" not in text and "0.031" not in text
+    for part in ("gender:", "birth year", "1990", "Austria", "170 cm"):
+        assert part not in text

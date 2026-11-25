@@ -4,7 +4,7 @@ description: How this project changes the PostgreSQL schema — versioned SQL fi
 license: MIT
 metadata:
   domain: database
-  triggers: migration, schema, V1__create_users.sql, schema_migrations, migrator.py, aws-challenge-sync, migrate, status, UNSUPPORTED_EVENT, MIGRATION_CHECKSUM_MISMATCH, MIGRATION_LOCKED, MIGRATION_FAILED, Flyway naming, fix forward, PostgreSQL 14
+  triggers: migration, schema, V1__create_users.sql, V2__add_users_embedding.sql, pgvector, CREATE EXTENSION, schema_migrations, migrator.py, aws-challenge-sync, migrate, status, UNSUPPORTED_EVENT, MIGRATION_CHECKSUM_MISMATCH, MIGRATION_LOCKED, MIGRATION_FAILED, Flyway naming, fix forward, PostgreSQL 14
   role: specialist
   scope: implementation
   related-skills: python-lambda, postgres-pro
@@ -23,7 +23,15 @@ Contract — event dispatch, inputs, result values, error strings, table columns
 ## Writing a migration
 
 - File `lambdas/sync/migrations/V<n>__<description>.sql`: `<n>` = next integer (1..n, no gap, no leading zero),
-  `<description>` `[a-z0-9_]+`, UTF-8. Nothing else may be in the directory (any other file → `MIGRATION_INVALID_FILES`).
+  `<description>` `[a-z0-9_]+`, UTF-8, **LF line endings** (`.gitattributes` `lambdas/** text eol=lf`; a CRLF checkout
+  would change the checksum). Nothing else may be in the directory (any other file → `MIGRATION_INVALID_FILES`).
+- Applied so far: V1 `users` (Week 3), V2 extension `vector` + `users.embedding vector(1024)` + HNSW index
+  `users_embedding_hnsw_idx` (`vector_l2_ops`) (Week 4, spec 10; bedrock-embeddings skill). `test_migrator.py` pins
+  the V1 SHA-256 and checks V2 statement by statement.
+- **Extensions:** `CREATE EXTENSION IF NOT EXISTS <name>` inside the migration; it needs `rds_superuser` on RDS (the
+  proxy DB user is the master user, which has it) and the extension must be in the RDS 14 allow-list (pgvector 0.8.0
+  on RDS 14.18; the local image `pgvector/pgvector:0.8.7-pg14` — use no feature newer than 0.8.0). `IF NOT EXISTS`
+  only for the extension; tables, columns and indexes fail loudly if they already exist.
 - **PostgreSQL 14 syntax only** (RDS is 14, R-14): no `MERGE`, no `UNIQUE NULLS NOT DISTINCT`, no SQL/JSON
   constructors, no `GRANT … SET`, no PG 15+ functions. The local image is PostgreSQL 14, so the optional integration
   test catches most mistakes.
@@ -39,7 +47,9 @@ Contract — event dispatch, inputs, result values, error strings, table columns
 
 ## Runner rules (as implemented)
 
-0. The sync dispatcher sends an event to the runner only if it has a top-level `action` key; an EventBridge
+0. The sync dispatcher sends an event to the runner only if it has a top-level `action` key whose value is not one
+   of the vector actions `embed-missing`, `seed`, `similar` (those go to `vectors.handle`, bedrock-embeddings skill;
+   every other value, including unknown ones, still reaches the runner → `MIGRATION_BAD_REQUEST`); an EventBridge
    `UserConfirmed` envelope goes to the upsert `user_sync.handle` (user-sync skill), anything else ends as
    `UNSUPPORTED_EVENT` (no DB connection).
 1. Event must be exactly `{"action":"migrate"}` or `{"action":"status"}`, else `MIGRATION_BAD_REQUEST` (no DB
@@ -74,6 +84,8 @@ Contract — event dispatch, inputs, result values, error strings, table columns
 
 ## Local check
 
-`docker compose up -d` (PostgreSQL 14), then set `MIGRATE_TEST_DATABASE_URL=postgresql://app:app@localhost:5432/aws_challenge`
-and run `pytest lambdas/shared lambdas/sync`: the integration test applies all files in a throw-away schema,
-checks `users` against spec 06 (columns, types, nullability, defaults, only the primary key) and drops the schema.
+`docker compose up -d` (PostgreSQL 14 + pgvector), then set `MIGRATE_TEST_DATABASE_URL=postgresql://app:app@localhost:5432/aws_challenge`
+and run `pytest lambdas/shared lambdas/sync`: the integration test applies all files in a throw-away schema
+(search path `<schema>, public`, so an extension already installed in `public` is found; a newly created one lives in
+the schema and is dropped with it), checks `users` against spec 06 (columns, types incl. `vector(1024)`, nullability,
+defaults, primary key + HNSW index only) and drops the schema.

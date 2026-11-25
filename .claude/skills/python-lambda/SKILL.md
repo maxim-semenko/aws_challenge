@@ -23,7 +23,7 @@ the owner uploads it (CLAUDE.md §3.11; Lambda console → *Upload from .zip fil
 
 ## Layout
 
-Function-specific rules live in their own skills: `admin-api` (lambdas/admin), `user-sync` (sync upsert, trigger), `postgres-migrations` (sync migrations).
+Function-specific rules live in their own skills: `admin-api` (lambdas/admin), `user-sync` (sync upsert, trigger), `postgres-migrations` (sync migrations), `bedrock-embeddings` (sync embeddings and vector actions).
 
 ```
 lambdas/
@@ -36,9 +36,11 @@ lambdas/
     <data>/                packaged data, e.g. sync/migrations/
     tests/conftest.py      puts lambdas/<function> and lambdas/shared on sys.path (same layout as the zip)
     tests/test_*.py        pytest; test doubles for boto3 and the DB
-  sync/                    lambda_function.py = dispatcher (spec 06 §Inputs: `action` → migrator.handle,
-                           UserConfirmed → user_sync.handle, else UNSUPPORTED_EVENT); migrator.py = migration runner;
-                           migrations/V<n>__*.sql (postgres-migrations skill); user_sync.py = upsert (user-sync skill)
+  sync/                    lambda_function.py = dispatcher (spec 06 §Inputs: `action` embed-missing/seed/similar →
+                           vectors.handle, other `action` → migrator.handle, UserConfirmed → user_sync.handle, else
+                           UNSUPPORTED_EVENT); migrator.py = migration runner; migrations/V<n>__*.sql
+                           (postgres-migrations skill); user_sync.py = upsert (user-sync skill); embeddings.py = Bedrock
+                           Titan V2 client + text template, vectors.py = vector actions (bedrock-embeddings skill)
   post-confirmation/       Cognito trigger, boto3 only (no requirements.txt), outside the VPC (user-sync skill)
 ```
 

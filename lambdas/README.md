@@ -8,7 +8,7 @@ deployed; the deployed names and settings are in [docs/ENVIRONMENT.md](../docs/E
 |---|---|---|
 | `admin/` | `aws-challenge-admin` | `GET /admin` (users list for admins) behind the HTTP API JWT authorizer (spec 08; skill `admin-api`) |
 | `chatbot/` | `aws-challenge-chatbot` | natural-language search through Bedrock (Week 5) |
-| `sync/` | `aws-challenge-sync` | copies Cognito users into PostgreSQL (`user_sync.py`, spec 07) and applies the SQL migrations in `sync/migrations/` on the owner's invoke (ADR-017) |
+| `sync/` | `aws-challenge-sync` | copies Cognito users into PostgreSQL (`user_sync.py`, spec 07) with a Bedrock Titan V2 profile embedding (`embeddings.py`, spec 10), applies the SQL migrations in `sync/migrations/` on the owner's invoke (ADR-017) and runs the owner's vector actions `embed-missing`, `seed`, `similar` (`vectors.py`, specs 10, 11; skill `bedrock-embeddings`) |
 | `post-confirmation/` | `aws-challenge-post-confirmation` | Cognito PostConfirmation trigger: publishes `UserConfirmed` to EventBridge, outside the VPC (ADR-016) |
 | `shared/` | — (not a function) | `db.py`: IAM-auth TLS connection to RDS Proxy, copied into each zip by `package.py` |
 

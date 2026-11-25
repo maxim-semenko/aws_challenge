@@ -4,10 +4,10 @@ description: How this project copies confirmed Cognito users into PostgreSQL —
 license: MIT
 metadata:
   domain: backend
-  triggers: user sync, UserConfirmed, PostConfirmation, post-confirmation, PutEvents, EventBridge, aws-challenge-events, aws-challenge-user-confirmed, user_sync.py, upsert, publish_failed, rejected, invalidFields, re-sync, back-fill, Send events
+  triggers: user sync, UserConfirmed, embedding on upsert, PostConfirmation, post-confirmation, PutEvents, EventBridge, aws-challenge-events, aws-challenge-user-confirmed, user_sync.py, upsert, publish_failed, rejected, invalidFields, re-sync, back-fill, Send events
   role: specialist
   scope: implementation
-  related-skills: python-lambda, postgres-migrations, cognito-user-pool, postgres-pro
+  related-skills: python-lambda, postgres-migrations, bedrock-embeddings, cognito-user-pool, postgres-pro
   source: project (created by T03-04)
   used-by: [backend, devops, tester]
 ---
@@ -26,7 +26,9 @@ Owner: Cognito console "Confirm account" (AdminConfirmSignUp)
   -> PostConfirmation trigger  lambdas/post-confirmation/lambda_function.py   (no VPC, 5 s Cognito limit)
   -> PutEvents (1 entry)       bus from env EVENT_BUS_NAME, source aws-challenge.cognito, detail-type UserConfirmed
   -> rule (pattern on source + detail-type) -> async invoke of aws-challenge-sync
-  -> lambdas/sync/lambda_function.py dispatch -> user_sync.handle -> one upsert into users via RDS Proxy
+  -> lambdas/sync/lambda_function.py dispatch -> user_sync.handle
+       -> Bedrock Titan V2 embedding of the profile text (before the DB connection; never raises)
+       -> one upsert into users (incl. embedding) via RDS Proxy
 ```
 
 ## Trigger rules (`lambdas/post-confirmation/`)
@@ -61,7 +63,13 @@ Owner: Cognito console "Confirm account" (AdminConfirmSignUp)
   text attribute, `attributes` when it is not an object). Digits are ASCII only (`[0-9]`); integers outside the SPA
   range are stored if they fit PostgreSQL `integer`; `confirmedAt` without offset is taken as UTC. Unknown keys are
   ignored.
-- One statement `SQL_UPSERT`: `INSERT … ON CONFLICT (id) DO UPDATE` of every mapped column + `updated_at = now()`,
+- Embedding (Week 4, spec 10; details: bedrock-embeddings skill): after mapping, `embeddings.build_text(params)` →
+  no text → `skipped` (no call); else one `InvokeModel` **before** `db.connect()`. Any Bedrock failure → `embedding`
+  NULL, log `embedding: failed` + `errorClass`, **normal return** (no raise, no async retry — ADR-020). The upsert
+  writes `embedding = EXCLUDED.embedding` on conflict too, so a failed re-sync clears a stale vector;
+  `{"action":"embed-missing"}` refills NULLs. Log adds `embedding` and `bedrockMs` (not on `rejected`).
+- One statement `SQL_UPSERT`: `INSERT … ON CONFLICT (id) DO UPDATE` of every mapped column (incl. `embedding` as
+  `CAST(:embedding AS vector)`) + `updated_at = now()`,
   `created_at` untouched, explicit `CAST(:param AS <type>)`, `RETURNING (xmax = 0)` → `inserted` / `updated`. Values
   only as pg8000 `:name` parameters. No explicit transaction (single statement, autocommit).
 - Connection: `db.connect()` with the shared 10 s socket timeout (not the runner's 55 s), closed in `finally`.
@@ -81,7 +89,9 @@ Use for a user confirmed before the trigger existed, after `publish_failed`, or 
    `aws-challenge.cognito`, Detail type `UserConfirmed`, Event detail = the JSON below with the copied values (leave
    out attributes that are not set; never `email_verified`).
 3. Verify: `/aws/lambda/aws-challenge-sync` shows one line with that `userSub` and `outcome` `inserted` (new) or
-   `updated` (existing); `rejected` means `sub`/`email` was mistyped (`invalidFields` names it).
+   `updated` (existing); `rejected` means `sub`/`email` was mistyped (`invalidFields` names it). `embedding` is
+   `stored` only while the Bedrock endpoint exists (ADR-020); `failed` / `UNREACHABLE` otherwise — then run
+   `{"action":"embed-missing"}` in the next session.
 
 Sample event detail (fictitious values; the pool id is a placeholder — take the real one from ENVIRONMENT.md):
 
@@ -115,7 +125,8 @@ full envelope (`"source"`, `"detail-type"`, `"detail"` at the top level) — nev
 ```
 
 Doubles: the trigger tests replace `lambda_function._events_client` with a stub recording `put_events`; the sync
-tests replace `db.connect` with a fake connection that keeps `users` as a dict and answers `[[inserted]]`.
+tests replace `db.connect` with a fake connection that keeps `users` as a dict and answers `[[inserted]]`, and
+`embeddings._bedrock_client` with `tests/bedrock_stub.StubBedrock` (autouse; no test reaches Bedrock).
 `test_user_sync_integration.py` runs the real upsert against local PostgreSQL 14 after applying the migrations in a
 throw-away schema — skipped unless `MIGRATE_TEST_DATABASE_URL` is set (`docker compose up -d`, python-lambda skill).
 Build: `py -3.13 lambdas/package.py post-confirmation` and `… sync`.

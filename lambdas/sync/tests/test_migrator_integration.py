@@ -1,8 +1,9 @@
-"""Optional integration test against a local PostgreSQL 14 (docker compose up -d) — AC-06.1, local run.
+"""Optional integration test against a local PostgreSQL 14 + pgvector (docker compose up -d) — AC-06.1, AC-10.1.
 
 Skipped unless MIGRATE_TEST_DATABASE_URL is set, e.g.
     MIGRATE_TEST_DATABASE_URL=postgresql://app:app@localhost:5432/aws_challenge
-Runs in a throw-away schema (dropped at the end); plain local connection, no IAM token, no TLS.
+Runs in a throw-away schema (dropped at the end; `public` stays on the search path so an already installed
+extension `vector` is found); plain local connection, no IAM token, no TLS.
 """
 
 import os
@@ -31,6 +32,7 @@ EXPECTED_COLUMNS = [
     ["confirmed_at", "timestamp with time zone", "YES", None],
     ["created_at", "timestamp with time zone", "NO", "now()"],
     ["updated_at", "timestamp with time zone", "NO", "now()"],
+    ["embedding", "USER-DEFINED", "YES", None],  # vector(1024), V2
 ]
 
 
@@ -46,7 +48,7 @@ def conn():
     )
     schema = f"it_migrate_{uuid.uuid4().hex[:12]}"
     connection.run(f"CREATE SCHEMA {schema}")  # generated identifier, no user input
-    connection.run(f"SET search_path TO {schema}")
+    connection.run(f"SET search_path TO {schema}, public")
     connection.schema = schema
     try:
         yield connection
@@ -59,13 +61,13 @@ def run(connection, action):
     return lf.run(connection, action, lf.MIGRATIONS_DIR, {"action": action, "applied": [], "current": None})
 
 
-def test_v1_on_postgresql_14(conn):
+def test_v1_v2_on_postgresql_14(conn):
     version = conn.run("SHOW server_version_num")[0][0]
     assert 140000 <= int(version) < 150000, f"local server is not PostgreSQL 14: {version}"
 
-    assert run(conn, "migrate") == {"applied": [1], "current": 1}
-    assert run(conn, "migrate") == {"applied": [], "current": 1}
-    assert run(conn, "status") == {"current": 1, "pending": []}
+    assert run(conn, "migrate") == {"applied": [1, 2], "current": 2}
+    assert run(conn, "migrate") == {"applied": [], "current": 2}
+    assert run(conn, "status") == {"current": 2, "pending": []}
 
     columns = conn.run(
         "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns "
@@ -73,6 +75,14 @@ def test_v1_on_postgresql_14(conn):
         schema=conn.schema,
     )
     assert columns == EXPECTED_COLUMNS
+    embedding_type = conn.run(
+        "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid "
+        "JOIN pg_namespace n ON n.oid = t.relnamespace "
+        "WHERE n.nspname = :schema AND t.relname = 'users' AND a.attname = 'embedding'",
+        schema=conn.schema,
+    )
+    assert embedding_type == [["vector(1024)"]]
+    assert conn.run("SELECT count(*) FROM pg_extension WHERE extname = 'vector'") == [[1]]
 
     constraints = conn.run(
         "SELECT c.contype, a.attname FROM pg_constraint c "
@@ -84,10 +94,14 @@ def test_v1_on_postgresql_14(conn):
     assert constraints == [["p", "id"]]
 
     indexes = conn.run(
-        "SELECT indexname FROM pg_indexes WHERE schemaname = :schema AND tablename = 'users'", schema=conn.schema
+        "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = :schema AND tablename = 'users' "
+        "ORDER BY indexname",
+        schema=conn.schema,
     )
-    assert indexes == [["users_pkey"]]
+    assert [name for name, _ in indexes] == ["users_embedding_hnsw_idx", "users_pkey"]
+    assert indexes[0][1].endswith("USING hnsw (embedding vector_l2_ops)")
 
-    history = conn.run("SELECT version, description, checksum FROM schema_migrations")
-    migration = lf.load_migrations(lf.MIGRATIONS_DIR)[0]
-    assert history == [[1, "create_users", migration.checksum]]
+    history = conn.run("SELECT version, description, checksum FROM schema_migrations ORDER BY version")
+    migrations = lf.load_migrations(lf.MIGRATIONS_DIR)
+    assert history == [[m.version, m.description, m.checksum] for m in migrations]
+    assert [m.description for m in migrations] == ["create_users", "add_users_embedding"]

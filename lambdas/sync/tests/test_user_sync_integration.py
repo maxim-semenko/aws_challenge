@@ -3,7 +3,7 @@
 Skipped unless MIGRATE_TEST_DATABASE_URL is set (same variable as test_migrator_integration.py), e.g.
     MIGRATE_TEST_DATABASE_URL=postgresql://app:app@localhost:5432/aws_challenge
 Applies the migrations in a throw-away schema (dropped at the end), then runs the handler with db.connect replaced by
-the local connection; plain local connection, no IAM token, no TLS.
+the local connection; plain local connection, no IAM token, no TLS. Bedrock is the StubBedrock double.
 """
 
 import copy
@@ -14,10 +14,13 @@ from urllib.parse import unquote, urlparse
 
 import pg8000.native
 import pytest
+from botocore.exceptions import ConnectTimeoutError
 
 import db
+import embeddings
 import migrator
 import user_sync
+from bedrock_stub import StubBedrock, install, unit_vector
 
 URL = os.environ.get("MIGRATE_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="MIGRATE_TEST_DATABASE_URL not set")
@@ -68,7 +71,7 @@ def conn(monkeypatch):
     )
     schema = f"it_sync_{uuid.uuid4().hex[:12]}"
     connection.run(f"CREATE SCHEMA {schema}")  # generated identifier, no user input
-    connection.run(f"SET search_path TO {schema}")
+    connection.run(f"SET search_path TO {schema}, public")
     migrator.run(connection, "migrate", migrator.MIGRATIONS_DIR, {"action": "migrate", "applied": [], "current": None})
     monkeypatch.setattr(db, "connect", lambda **kwargs: Unclosable(connection))
     try:
@@ -78,13 +81,21 @@ def conn(monkeypatch):
         connection.close()
 
 
-def test_upsert_on_postgresql_14(conn):
+def test_upsert_on_postgresql_14(conn, monkeypatch):
+    install(monkeypatch, StubBedrock(default=unit_vector(3, scale=2.0)))
     assert user_sync.handle(copy.deepcopy(EVENT), Context()) == {"outcome": "inserted"}
+    stored = conn.run(
+        "SELECT vector_dims(embedding), embedding <-> CAST(:v AS vector) FROM users",
+        v=embeddings.to_vector_literal(unit_vector(3)),
+    )
+    assert stored[0][0] == 1024 and stored[0][1] < 1e-6  # normalised before storing
     first = conn.run("SELECT created_at, updated_at FROM users WHERE id = CAST(:id AS uuid)", id=SUB)
 
     changed = copy.deepcopy(EVENT)
     changed["detail"]["attributes"] = {"birthdate": "2000-02-29", "custom:weight": "-5"}
+    install(monkeypatch, StubBedrock(outcomes=[ConnectTimeoutError(endpoint_url="https://x")]))
     assert user_sync.handle(changed, Context()) == {"outcome": "updated"}
+    assert conn.run("SELECT embedding IS NULL FROM users") == [[True]]  # failed re-sync: no stale vector
 
     rows = conn.run(
         "SELECT email, given_name, birthdate, height_cm, weight_kg, created_at, updated_at FROM users "

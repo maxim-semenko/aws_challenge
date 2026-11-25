@@ -293,7 +293,7 @@ def test_handler_migrates_packaged_files_closes_connection_and_logs_one_line(mon
 
     result = lf.handle({"action": "migrate"}, Context())
 
-    assert result == {"applied": [1], "current": 1}
+    assert result == {"applied": [1, 2], "current": 2}
     assert conn.closed
     (line,) = log_lines(capsys)
     assert {k: line[k] for k in ("level", "function", "awsRequestId", "action", "applied", "current", "outcome")} == {
@@ -301,8 +301,8 @@ def test_handler_migrates_packaged_files_closes_connection_and_logs_one_line(mon
         "function": "aws-challenge-sync",
         "awsRequestId": "req-123",
         "action": "migrate",
-        "applied": [1],
-        "current": 1,
+        "applied": [1, 2],
+        "current": 2,
         "outcome": "success",
     }
     assert isinstance(line["durationMs"], int)
@@ -343,7 +343,7 @@ def test_handler_lost_connection_logs_stable_error_without_foreign_message(monke
 def test_handler_status(monkeypatch, capsys):
     conn = FakeConnection()
     monkeypatch.setattr(db, "connect", lambda **kwargs: conn)
-    assert lf.handle({"action": "status"}, Context()) == {"current": 0, "pending": [1]}
+    assert lf.handle({"action": "status"}, Context()) == {"current": 0, "pending": [1, 2]}
     assert conn.closed
 
 
@@ -419,7 +419,8 @@ EXPECTED_USERS_COLUMNS = [
 
 def test_packaged_migrations_are_valid():
     migrations = lf.load_migrations(lf.MIGRATIONS_DIR)
-    assert [(m.version, m.file_name) for m in migrations] == [(1, "V1__create_users.sql")]
+    assert [(m.version, m.file_name) for m in migrations] == [
+        (1, "V1__create_users.sql"), (2, "V2__add_users_embedding.sql")]
 
 
 def test_v1_creates_users_exactly_as_spec_06():
@@ -430,3 +431,25 @@ def test_v1_creates_users_exactly_as_spec_06():
     columns = [" ".join(part.split()) for part in body.group(1).split(",")]
     assert [tuple(c.split(" ", 1)) for c in columns] == EXPECTED_USERS_COLUMNS
     assert not re.search(r"\b(CHECK|UNIQUE|INDEX|REFERENCES|embedding)\b", code, flags=re.IGNORECASE)
+
+
+# Checksum of V1 as applied in AWS (T03-03); V1 must stay byte-identical (spec 10 AC-10.1).
+V1_SHA256 = "9800e6e7c23943e75c048331bfbe393159fa518fdb0734fb28e61e144fa9a5c7"
+
+
+def test_v1_is_byte_identical_to_the_applied_file():
+    assert hashlib.sha256((lf.MIGRATIONS_DIR / "V1__create_users.sql").read_bytes()).hexdigest() == V1_SHA256
+
+
+def test_v2_adds_exactly_extension_column_and_hnsw_index():
+    """AC-10.1, static part: extension vector, nullable users.embedding vector(1024), HNSW index with vector_l2_ops."""
+    raw = (lf.MIGRATIONS_DIR / "V2__add_users_embedding.sql").read_bytes()
+    assert b"\r" not in raw  # LF only (.gitattributes), so the checksum is the same on every checkout
+    code = "\n".join(line.split("--", 1)[0] for line in raw.decode("utf-8").splitlines())
+    statements = [" ".join(part.split()) for part in code.split(";") if part.strip()]
+    assert statements == [
+        "CREATE EXTENSION IF NOT EXISTS vector",
+        "ALTER TABLE users ADD COLUMN embedding vector(1024)",
+        "CREATE INDEX users_embedding_hnsw_idx ON users USING hnsw (embedding vector_l2_ops)",
+    ]
+    assert not re.search(r"\b(BEGIN|COMMIT|ROLLBACK|CONCURRENTLY|NOT NULL)\b", code, flags=re.IGNORECASE)

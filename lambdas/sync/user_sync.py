@@ -2,8 +2,10 @@
 
 Reached through the dispatch in lambda_function.py. Validates `sub` and `email` (invalid -> outcome "rejected", no DB
 call, no error: a retry cannot fix it), maps the registration attributes tolerantly (unparsable -> NULL, field name
-logged) and runs one parameterised idempotent upsert into `users` (columns: spec 06). A database error raises, so
-Lambda retries the asynchronous invocation. Rules: the user-sync skill.
+logged), computes the profile embedding with Bedrock before the DB connection (spec 10; a Bedrock failure only stores
+NULL and is logged, never raised — ADR-020) and runs one parameterised idempotent upsert into `users` (columns:
+spec 06). A database error raises, so Lambda retries the asynchronous invocation. Rules: the user-sync and
+bedrock-embeddings skills.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Any
 import pg8000.native
 
 import db
+import embeddings
 
 SOURCE = "aws-challenge.cognito"
 DETAIL_TYPE = "UserConfirmed"
@@ -39,13 +42,14 @@ INTEGER_ATTRIBUTES = {"custom:height": "height_cm", "custom:weight": "weight_kg"
 # One statement; values only as :name parameters (pg8000 native), never formatted into the SQL text.
 SQL_UPSERT = (
     "INSERT INTO users (id, email, given_name, family_name, gender, birthdate, country, height_cm, weight_kg, "
-    "confirmed_at) VALUES (CAST(:id AS uuid), CAST(:email AS text), CAST(:given_name AS text), "
+    "confirmed_at, embedding) VALUES (CAST(:id AS uuid), CAST(:email AS text), CAST(:given_name AS text), "
     "CAST(:family_name AS text), CAST(:gender AS text), CAST(:birthdate AS date), CAST(:country AS text), "
-    "CAST(:height_cm AS integer), CAST(:weight_kg AS integer), CAST(:confirmed_at AS timestamptz)) "
+    "CAST(:height_cm AS integer), CAST(:weight_kg AS integer), CAST(:confirmed_at AS timestamptz), "
+    "CAST(:embedding AS vector)) "
     "ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, given_name = EXCLUDED.given_name, "
     "family_name = EXCLUDED.family_name, gender = EXCLUDED.gender, birthdate = EXCLUDED.birthdate, "
     "country = EXCLUDED.country, height_cm = EXCLUDED.height_cm, weight_kg = EXCLUDED.weight_kg, "
-    "confirmed_at = EXCLUDED.confirmed_at, updated_at = now() "
+    "confirmed_at = EXCLUDED.confirmed_at, embedding = EXCLUDED.embedding, updated_at = now() "
     "RETURNING (xmax = 0) AS inserted"
 )
 
@@ -175,11 +179,35 @@ def _log(context: Any, state: dict[str, Any], started: float, error: BaseExcepti
         "invalidFields": state["invalidFields"],
         "durationMs": round((time.monotonic() - started) * 1000),
     }
+    if state["embedding"] is not None:  # spec 10 §Outputs: added once the embedding step has run (not on rejected)
+        line["embedding"] = state["embedding"]
+        line["bedrockMs"] = state["bedrockMs"]
+        if state["bedrockError"] is not None:
+            line["errorClass"] = state["bedrockError"]
     if error is not None:
+        # A function error wins over a Bedrock errorClass (the Bedrock outcome stays visible in `embedding`).
         known = isinstance(error, (UserSyncError, db.DbConnectError))
         line["message"] = str(error) if known else "unexpected error"
         line["errorClass"] = type(error.__cause__ or error).__name__
     print(json.dumps(line, separators=(",", ":")))
+
+
+def _embedding(params: dict[str, Any], state: dict[str, Any]) -> str | None:
+    """Vector literal for the upsert, or None when skipped/failed. Never raises (spec 10 Behaviour 2-3, ADR-020)."""
+    text = embeddings.build_text(params)
+    if text is None:
+        state["embedding"], state["bedrockMs"] = "skipped", 0
+        return None
+    started = time.monotonic()
+    try:
+        vector = embeddings.embed(text)
+    except embeddings.EmbeddingError as exc:
+        state["embedding"], state["bedrockError"] = "failed", exc.error_class
+        return None
+    finally:
+        state["bedrockMs"] = round((time.monotonic() - started) * 1000)
+    state["embedding"] = "stored"
+    return embeddings.to_vector_literal(vector)
 
 
 def handle(event: dict[str, Any], context: Any) -> dict[str, str]:
@@ -191,6 +219,9 @@ def handle(event: dict[str, Any], context: Any) -> dict[str, str]:
         "outcome": None,
         "invalidFields": [],
         "message": "user synced",
+        "embedding": None,
+        "bedrockMs": None,
+        "bedrockError": None,
     }
     conn = None
     error: BaseException | None = None
@@ -208,6 +239,8 @@ def handle(event: dict[str, Any], context: Any) -> dict[str, str]:
             return {"outcome": "rejected"}
         state["userSub"] = params["id"]
 
+        # Bedrock first, so no DB connection idles during the call.
+        params["embedding"] = _embedding(params, state)
         conn = db.connect()
         try:
             rows = conn.run(SQL_UPSERT, **params)
