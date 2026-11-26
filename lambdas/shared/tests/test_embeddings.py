@@ -195,3 +195,27 @@ def test_error_class_mapping(exception, expected, monkeypatch):
     assert raised.value.error_class == expected
     assert str(raised.value) == expected  # never the foreign message
     assert raised.value.__cause__ is exception
+
+
+# --- embed_with_usage (chatbot, spec 12 S4) ------------------------------------------------------------------------
+
+
+def test_embed_with_usage_returns_the_same_vector_as_embed_and_the_token_count(monkeypatch):
+    stub = install(monkeypatch, StubBedrock(default=[0.5] * 1024))
+    vector, tokens = embeddings.embed_with_usage("gender: female")
+    assert vector == embeddings.embed("gender: female")
+    assert tokens == 7  # inputTextTokenCount of the stub
+    assert stub.calls[0] == stub.calls[1]  # identical request
+
+
+@pytest.mark.parametrize("count", [None, "7", -1, True, 1.5])
+def test_unusable_token_count_is_zero_not_an_error(count, monkeypatch):
+    body = json.dumps({"embedding": unit_vector(), "inputTextTokenCount": count}).encode()
+    install(monkeypatch, StubBedrock(default=body))
+    assert embeddings.embed_with_usage("x") == (unit_vector(), 0)
+
+
+def test_embed_with_usage_error_classes_as_embed(monkeypatch):
+    install(monkeypatch, StubBedrock(outcomes=[ReadTimeoutError(endpoint_url="https://x")]))
+    with pytest.raises(embeddings.EmbeddingError, match="^TIMEOUT$"):
+        embeddings.embed_with_usage("x")

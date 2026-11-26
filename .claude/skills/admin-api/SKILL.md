@@ -7,8 +7,8 @@ metadata:
   triggers: lambdas/admin, aws-challenge-admin, GET /admin, routeKey, payload 2.0, jwt claims, token_use, cognito:groups, problem+json, rawQueryString, sort whitelist, apiRequestId
   role: specialist
   scope: implementation
-  related-skills: python-lambda, http-api-jwt, spa-api-client, postgres-pro, test-master
-  source: project (created by T03-06)
+  related-skills: python-lambda, http-api-jwt, spa-api-client, postgres-pro, test-master, chatbot-api
+  source: project (created by T03-06; shared HTTP helpers moved to lambdas/shared by T05-02)
   used-by: [backend, tester, devops]
 ---
 
@@ -19,6 +19,12 @@ Contract (single home): [spec 08](../../../docs/specs/08-admin-api.md) §Inputs/
 rules in general: [python-lambda](../python-lambda/SKILL.md). API, authorizer, routes, CORS:
 [http-api-jwt](../http-api-jwt/SKILL.md). This file says how the handler implements the contract — never copy the
 field tables here.
+
+Shared helpers (T05-02): claims (`claims`, `expiry`, `authorized`), `parse_groups`, `is_admin`, `ApiError`, `problem`,
+`json_response`, the 401/403/404/500 texts and `TITLES` live in **`lambdas/shared/http_api.py`** (tests:
+`lambdas/shared/tests/test_http_api.py`) and are used by `admin` and `chatbot` (chatbot-api skill); the handler
+imports them (`parse_groups` stays importable from `lambda_function` for the admin tests). A change there changes both
+APIs — run `pytest lambdas/shared lambdas/admin` and `… lambdas/chatbot`.
 
 Routes (owner decision 2026-11-17, curriculum architecture diagram): the HTTP API has exactly two routes, `GET /admin`
 (this function, the users list) and `POST /chat` (Week 5, `aws-challenge-chatbot`) — no `/api` prefix, no `/api/me`
@@ -36,7 +42,7 @@ Routes (owner decision 2026-11-17, curriculum architecture diagram): the HTTP AP
 4. Query parameters → 400 (`detail` names the parameter, truncated to 64 chars; never echoes the value).
 5. Database: `db.connect()` lazily, two statements, `db.close_quietly` in `finally`.
 
-`cognito:groups` (`parse_groups`): `"[admin]"`, `"admin"`, `"[admin user]"` (space-separated inside brackets), a JSON
+`cognito:groups` (`http_api.parse_groups`): `"[admin]"`, `"admin"`, `"[admin user]"` (space-separated inside brackets), a JSON
 array string or a real list; commas are separators too; absent → `[]`. Exact-case match on `admin`. Re-check the real
 format in the first deployed log/test (spec 08 Edge Cases) — the parser accepts all forms seen so far.
 

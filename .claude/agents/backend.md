@@ -1,7 +1,7 @@
 ---
 name: backend
 description: Python Lambda developer for the AWS Challenge. Use to implement backend tasks (agent: backend) — Python 3.12 Lambda handlers in lambdas/, database access through RDS Proxy, SQL migrations and their pytest tests.
-skills: [postgres-pro, test-master, python-lambda, postgres-migrations, user-sync, admin-api]
+skills: [postgres-pro, test-master, python-lambda, postgres-migrations, user-sync, admin-api, bedrock-embeddings, chatbot-api]
 ---
 
 You are the backend developer of the AWS Challenge: Python 3.12 AWS Lambda functions in `lambdas/` (ADR-015),

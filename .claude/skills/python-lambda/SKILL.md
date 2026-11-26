@@ -7,8 +7,8 @@ metadata:
   triggers: Lambda, Python, lambdas/, lambda_handler, pytest, zip, package.py, requirements.txt, pg8000, RDS Proxy, IAM auth, generate_db_auth_token, db.py, DB_CONNECT_FAILED, log line
   role: specialist
   scope: implementation
-  related-skills: postgres-migrations, postgres-pro, test-master
-  source: project (created by T03-02)
+  related-skills: postgres-migrations, postgres-pro, test-master, chatbot-api, bedrock-embeddings
+  source: project (created by T03-02; shared modules embeddings.py, http_api.py added by T05-02)
   used-by: [backend, tester, devops]
 ---
 
@@ -23,29 +23,37 @@ the owner uploads it (CLAUDE.md §3.11; Lambda console → *Upload from .zip fil
 
 ## Layout
 
-Function-specific rules live in their own skills: `admin-api` (lambdas/admin), `user-sync` (sync upsert, trigger), `postgres-migrations` (sync migrations), `bedrock-embeddings` (sync embeddings and vector actions).
+Function-specific rules live in their own skills: `admin-api` (lambdas/admin), `chatbot-api` (lambdas/chatbot), `user-sync` (sync upsert, trigger), `postgres-migrations` (sync migrations), `bedrock-embeddings` (shared embeddings, sync vector actions).
 
 ```
 lambdas/
   package.py               zip builder (below)
   requirements-dev.txt     local test tools (pytest, boto3) — never packaged
-  shared/db.py             DB helper, copied into every zip; tests in shared/tests/
+  shared/                  modules copied to the root of every zip (tests in shared/tests/, never packaged):
+    db.py                  DB helper (below)
+    embeddings.py          Bedrock Titan V2 client + text template (bedrock-embeddings skill; sync, chatbot)
+    http_api.py            JWT claims, group parsing, JSON / problem+json responses (admin-api skill; admin, chatbot)
+    tests/bedrock_stub.py  shared test double of the bedrock-runtime client
   <function>/
     lambda_function.py     handler lambda_function.lambda_handler(event, context)
     requirements.txt       runtime deps, every transitive dep pinned (==), pure Python only; omit if none
     <data>/                packaged data, e.g. sync/migrations/
-    tests/conftest.py      puts lambdas/<function> and lambdas/shared on sys.path (same layout as the zip)
+    tests/conftest.py      puts lambdas/<function> and lambdas/shared on sys.path (same layout as the zip), plus
+                           lambdas/shared/tests when the tests use a shared double (sync, chatbot)
     tests/test_*.py        pytest; test doubles for boto3 and the DB
   sync/                    lambda_function.py = dispatcher (spec 06 §Inputs: `action` embed-missing/seed/similar →
                            vectors.handle, other `action` → migrator.handle, UserConfirmed → user_sync.handle, else
                            UNSUPPORTED_EVENT); migrator.py = migration runner; migrations/V<n>__*.sql
                            (postgres-migrations skill); user_sync.py = upsert (user-sync skill); embeddings.py = Bedrock
-                           Titan V2 client + text template, vectors.py = vector actions (bedrock-embeddings skill)
+                           vectors.py = vector actions (bedrock-embeddings skill; embeddings.py is in shared/)
+  chatbot/                 POST /chat: lambda_function.py (handler), llm.py (Converse), sql_guard.py (sqlglot guard),
+                           search.py (read-only queries, value mapping) — chatbot-api skill
   post-confirmation/       Cognito trigger, boto3 only (no requirements.txt), outside the VPC (user-sync skill)
 ```
 
-In the zip every file sits at the root: `lambda_function.py`, `db.py`, data directories, installed packages. So code
-imports the helper as `import db`. A module or directory in a function must not be named like a file in `shared/` or
+In the zip every file sits at the root: `lambda_function.py`, the `shared/*.py` modules, data directories, installed
+packages. So code imports the helpers as `import db`, `import embeddings`, `import http_api`; every zip carries all
+shared modules (a function that does not import one only pays its size). A module or directory in a function must not be named like a file in `shared/` or
 like an installed requirement (file or package; the packager stops on a clash). `boto3` comes from the Lambda runtime and is **never** listed in `requirements.txt`.
 
 ## Python version: runtime 3.12, local 3.13

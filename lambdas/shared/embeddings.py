@@ -1,8 +1,9 @@
-"""Profile embeddings for aws-challenge-sync: text template, Bedrock Titan Text Embeddings V2 call, vector checks.
+"""Embeddings for sync (profiles) and chatbot (queries): text template, Bedrock Titan Text Embeddings V2 call, checks.
 
-Contract (template, request, client config, error classes): docs/specs/10-embeddings.md; decisions ADR-019 (model,
-1024 dimensions, normalised) and ADR-020 (on-demand VPC endpoint, fail fast, never raise from the upsert). Rules: the
-bedrock-embeddings skill. No network call at import: the client is created on first use.
+Contract (template, request, client config, error classes): docs/specs/10-embeddings.md; chatbot use: spec 12;
+decisions ADR-019 (model, 1024 dimensions, normalised) and ADR-020 (on-demand VPC endpoint, fail fast, never raise
+from the upsert). Shared module since T05-02 (moved from lambdas/sync; copied into every zip by package.py). Rules:
+the bedrock-embeddings skill. No network call at import: the client is created on first use.
 """
 
 from __future__ import annotations
@@ -98,7 +99,8 @@ def to_vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(repr(x) for x in vector) + "]"
 
 
-def _error_class(exc: Exception) -> str:
+def error_class(exc: Exception) -> str:
+    """errorClass of spec 10 for an exception of a bedrock-runtime call (never the exception's message)."""
     if isinstance(exc, ReadTimeoutError):
         return TIMEOUT
     if isinstance(exc, BotoConnectionError):  # ConnectTimeoutError, EndpointConnectionError, SSL/proxy errors
@@ -109,17 +111,31 @@ def _error_class(exc: Exception) -> str:
     return type(exc).__name__
 
 
-def embed(text: str) -> list[float]:
-    """One InvokeModel call; returns the unit-length vector. Every failure is EmbeddingError(<errorClass>)."""
+def _token_count(value: Any) -> int:
+    """Titan `inputTextTokenCount` as a non-negative integer; 0 when absent or unusable (never fails the call)."""
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return 0
+
+
+def embed_with_usage(text: str) -> tuple[list[float], int]:
+    """One InvokeModel call -> (unit-length vector, input token count). Every failure is EmbeddingError(<errorClass>)."""
     try:
         response = _bedrock().invoke_model(
             modelId=MODEL_ID, contentType="application/json", accept="application/json", body=request_body(text)
         )
         raw = response["body"].read()
     except Exception as exc:
-        raise EmbeddingError(_error_class(exc)) from exc
+        raise EmbeddingError(error_class(exc)) from exc
     try:
         payload = json.loads(raw)
     except (ValueError, TypeError) as exc:
         raise EmbeddingError(BAD_RESPONSE) from exc
-    return normalise(payload.get("embedding") if isinstance(payload, dict) else None)
+    if not isinstance(payload, dict):
+        raise EmbeddingError(BAD_RESPONSE)
+    return normalise(payload.get("embedding")), _token_count(payload.get("inputTextTokenCount"))
+
+
+def embed(text: str) -> list[float]:
+    """One InvokeModel call; returns the unit-length vector. Every failure is EmbeddingError(<errorClass>)."""
+    return embed_with_usage(text)[0]

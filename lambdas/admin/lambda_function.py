@@ -1,4 +1,5 @@
 """aws-challenge-admin: the admin route behind the HTTP API JWT authorizer (spec 08, design admin-api §2).
+Claims, group parsing and response helpers: shared http_api.py.
 
 Payload format 2.0. Checks in this order: claims present and token_use == "access" (else 401) -> route by
 `routeKey` (else 404) -> group "admin" (else 403) -> query parameters (else 400) -> database.
@@ -20,9 +21,21 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 import db
+from http_api import (  # shared HTTP helpers (lambdas/shared/http_api.py, T05-02); parse_groups re-exported for tests
+    DETAIL_401,
+    DETAIL_403,
+    DETAIL_404,
+    DETAIL_500,
+    ApiError,
+    authorized,
+    claims as read_claims,
+    is_admin,
+    json_response,
+    parse_groups,  # noqa: F401
+    problem,
+)
 
 ROUTE_USERS = "GET /admin"
-ADMIN_GROUP = "admin"
 
 PAGE_MAX = 1_000_000
 SIZE_MIN, SIZE_MAX = 1, 100
@@ -48,119 +61,10 @@ SQL_PAGE = {
     for direction, keyword in SORT_DIRECTIONS.items()
 }
 
-TITLES = {
-    400: "Bad Request",
-    401: "Unauthorized",
-    403: "Forbidden",
-    404: "Not Found",
-    500: "Internal Server Error",
-}
-DETAIL_401 = "A valid access token is required."
-DETAIL_403 = "Membership in the group admin is required."
-DETAIL_404 = "The route is not served by this function."
-DETAIL_500 = "The request could not be completed."
 NAME_MAX = 64  # longest parameter name echoed in a 400 detail
 
 MESSAGE_DONE = "request completed"
 MESSAGE_FAILED = "INTERNAL_ERROR"
-
-
-class ApiError(Exception):
-    """A 4xx answer as problem+json; `detail` is a fixed text or names a query parameter, never user data."""
-
-    def __init__(self, status: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status = status
-        self.detail = detail
-
-
-# --- responses -------------------------------------------------------------------------------------------------------
-
-
-def _response(status: int, body: dict[str, Any], content_type: str) -> dict[str, Any]:
-    return {
-        "statusCode": status,
-        "headers": {"Content-Type": content_type, "Cache-Control": "no-store"},
-        "body": json.dumps(body, ensure_ascii=False, separators=(",", ":")),
-        "isBase64Encoded": False,
-    }
-
-
-def _json(body: dict[str, Any]) -> dict[str, Any]:
-    return _response(200, body, "application/json")
-
-
-def _problem(status: int, detail: str) -> dict[str, Any]:
-    body = {"type": "about:blank", "title": TITLES[status], "status": status, "detail": detail}
-    return _response(status, body, "application/problem+json")
-
-
-# --- claims ----------------------------------------------------------------------------------------------------------
-
-
-def _claims(event: Any) -> dict[str, Any] | None:
-    """Claims of the JWT authorizer (payload 2.0); never read from headers, query or body."""
-    if not isinstance(event, dict):
-        return None
-    context = event.get("requestContext")
-    authorizer = context.get("authorizer") if isinstance(context, dict) else None
-    jwt = authorizer.get("jwt") if isinstance(authorizer, dict) else None
-    claims = jwt.get("claims") if isinstance(jwt, dict) else None
-    return claims if isinstance(claims, dict) else None
-
-
-def _expiry(claims: dict[str, Any]) -> datetime | None:
-    """Claim `exp` (epoch seconds; payload v2 delivers claims as strings) as an aware UTC datetime."""
-    value = claims.get("exp")
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        seconds = value
-    elif isinstance(value, str) and DIGITS.fullmatch(value) and len(value) <= 12:
-        seconds = int(value)
-    else:
-        return None
-    try:
-        return datetime.fromtimestamp(seconds, tz=timezone.utc)
-    except (OverflowError, OSError, ValueError):
-        return None
-
-
-def _authorized(claims: dict[str, Any] | None) -> bool:
-    """Claims present with a subject and a valid expiry, and the token is an access token (ADR-004)."""
-    if claims is None:
-        return False
-    sub = claims.get("sub")
-    return (
-        isinstance(sub, str)
-        and sub != ""
-        and claims.get("token_use") == "access"
-        and _expiry(claims) is not None
-    )
-
-
-def parse_groups(value: Any) -> list[str]:
-    """`cognito:groups` -> list of group names.
-
-    Payload v2 delivers the claim as a string such as "[admin]", "admin" or "[admin user]"; a JSON array string or a
-    real list are accepted too. Group names never contain whitespace; commas are treated as separators as well.
-    """
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, str) and item != ""]
-    if not isinstance(value, str):
-        return []
-    text = value.strip()
-    if text.startswith("[") and text.endswith("]"):
-        try:
-            parsed = json.loads(text)
-        except ValueError:
-            parsed = None
-        if isinstance(parsed, list):
-            return [item for item in parsed if isinstance(item, str) and item != ""]
-        text = text[1:-1]
-    return [name for name in re.split(r"[\s,]+", text) if name != ""]
 
 
 # --- query parameters ------------------------------------------------------------------------------------------------
@@ -254,12 +158,12 @@ def _users(event: dict[str, Any]) -> dict[str, Any]:
         rows = conn.run(SQL_PAGE[(field, direction)], limit=size, offset=page * size)
     finally:
         db.close_quietly(conn)
-    return _json({"items": [map_user(row) for row in rows], "page": page, "size": size, "total": total})
+    return json_response({"items": [map_user(row) for row in rows], "page": page, "size": size, "total": total})
 
 
 def _route(event: dict[str, Any], route: Any, claims: dict[str, Any]) -> dict[str, Any]:
     if route == ROUTE_USERS:
-        if ADMIN_GROUP not in parse_groups(claims.get("cognito:groups")):
+        if not is_admin(claims):
             raise ApiError(403, DETAIL_403)
         return _users(event)
     raise ApiError(404, DETAIL_404)
@@ -313,18 +217,18 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
     started = time.monotonic()
     claims: dict[str, Any] | None = None
     error: BaseException | None = None
-    response: dict[str, Any] = _problem(500, DETAIL_500)
+    response: dict[str, Any] = problem(500, DETAIL_500)
     try:
-        claims = _claims(event)
-        if not _authorized(claims):
+        claims = read_claims(event)
+        if not authorized(claims):
             raise ApiError(401, DETAIL_401)
         assert claims is not None and isinstance(event, dict)
         response = _route(event, event.get("routeKey"), claims)
     except ApiError as exc:
-        response = _problem(exc.status, exc.detail)
+        response = problem(exc.status, exc.detail)
     except Exception as exc:  # database or unexpected error: generic detail, class name in the log only
         error = exc
-        response = _problem(500, DETAIL_500)
+        response = problem(500, DETAIL_500)
     finally:
         _log(context, event, claims, response["statusCode"], started, error)
     return response
