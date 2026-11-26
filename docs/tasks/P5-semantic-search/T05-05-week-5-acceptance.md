@@ -2,7 +2,7 @@
 id: T05-05
 title: "Week 5 acceptance check"
 phase: P5-semantic-search
-status: Todo
+status: Done
 agent: tester
 skills: [test-master]
 depends_on: [T05-01, T05-02, T05-03, T05-04]
@@ -48,3 +48,5 @@ instead of a Bedrock Agent (Q-21 A, ADR-021), Nova Micro instead of Claude 3 Son
 ## Notes
 
 - 2026-11-25: created by Week 5 planning; `Todo` (no open blocker of its own; waits for T05-01 … T05-04 `Done`).
+- 2026-11-26: Week 5 acceptance closed on the owner statement ("everything works") plus the T05-03 evidence: vector top-5 correct (W5-G2), vector path 260 ms on the deployed SPA (W5-G1), sql path works (Nova Micro → guarded SELECT), destructive sql rejected (400), admin-only page. Deviations: no Bedrock Agent (ADR-021), Nova Micro (ADR-022), < 1 s only for the vector path.
+- 2026-11-26: set to `Done` by the owner (Week 5 closed).

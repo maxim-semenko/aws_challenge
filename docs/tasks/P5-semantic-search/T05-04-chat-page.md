@@ -2,7 +2,7 @@
 id: T05-04
 title: "SPA: admin-only /chat page — form, debounced request, generic results table, states"
 phase: P5-semantic-search
-status: Review
+status: Done
 agent: frontend
 skills: [react-expert, spa-api-client, amplify-auth]
 depends_on: []
@@ -69,3 +69,4 @@ and sees rows or statistics from the user base. Automatic requests must not burn
     `ChatPage` returns the `ComingLater` placeholder before any hook and `useChat` is disabled (`isApiConfigured`).
   - Not verified locally in a browser (`npm run preview` needs a configured pool/API for the page states);
     AC-13.3 … AC-13.5 are owner checks on the deployed SPA (T05-03 / T05-05).
+- 2026-11-26: set to `Done` by the owner (Week 5 closed).

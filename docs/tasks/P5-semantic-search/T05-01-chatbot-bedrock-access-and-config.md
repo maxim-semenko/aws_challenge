@@ -2,7 +2,7 @@
 id: T05-01
 title: "LLM model check, chatbot role (Bedrock + RDS), chatbot configuration, POST /chat integration timeout 29 s (console runbook)"
 phase: P5-semantic-search
-status: Review
+status: Done
 agent: devops
 skills: [cloud-architect, http-api-jwt, bedrock-embeddings]
 depends_on: []
@@ -257,3 +257,4 @@ billed only per invocation (≈ $0 at learning volume); the existing on-demand B
 - 2026-11-25 (owner screenshot, step 1): Bedrock → Infer → Inference profiles → System-defined: **EU Nova Micro**, model Nova Micro, ID `eu.amazon.nova-micro-v1:0`, ARN `arn:aws:bedrock:eu-west-…`, regions eu-west-3, eu-west-1, eu-central-1, eu-north-1 — matches spec 12 and the policy (E1, profile part). In the 2026 console the menu is "Infer → Inference profiles", not "Cross-region inference".
 - 2026-11-25 (owner): role `aws-challenge-chatbot-role-3euwe6l7` (created 2026-11-12) — had `AWSLambdaBasicExecutionRole-ab760b8d-…` and `AWSLambdaVPCAccessExecutionRole-c74f9e98-…` (screenshot); owner added the two inline policies `aws-challenge-chatbot-rds-connect` and `aws-challenge-chatbot-bedrock-invoke` → 4 policies, and set the function config (512 MB, 30 s, env DB_*) — owner statement, no screenshot. `POST /chat` integration `dyujbqp` (route id `2r7hjw2`) → `aws-challenge-chatbot`, payload 2.0 ✔ (screenshot); timeout was 30000 ms → owner asked to set 29000 ms.
 - 2026-11-25 (owner statement): `POST /chat` integration timeout set to 29000 ms; `/aws/lambda/aws-challenge-chatbot` retention 2 weeks. All runbook steps done → `Review` (evidence partly by owner statement).
+- 2026-11-26: set to `Done` by the owner (Week 5 closed).

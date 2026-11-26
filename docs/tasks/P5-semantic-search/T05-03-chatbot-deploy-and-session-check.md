@@ -2,7 +2,7 @@
 id: T05-03
 title: "Endpoint session: upload chatbot / sync / admin zips, POST /chat checks (401/403/400, TOP-5, < 1 s, SQL, safety, logs), endpoint off"
 phase: P5-semantic-search
-status: In progress
+status: Done
 agent: devops
 skills: [cloud-architect, http-api-jwt, bedrock-embeddings]
 depends_on: [T05-01, T05-02, T05-04]
@@ -370,3 +370,7 @@ tokens per SQL question × ~10 ≈ **< $0.001**; Titan ≈ 20 tokens per search 
   `build_text` (step 2.1). Deviation from the constraint order: the fail-fast check runs after the uploads (needs the
   new code) and before the endpoint. Frontend (T05-04) and `lambdas/` are uncommitted — step 0.3 needs the owner's
   commit/push go-ahead. ENVIRONMENT.md is updated after the owner's evidence. PLAN.md not changed (coordinator).
+- 2026-11-26 (owner, steps 1–2): chatbot/sync/admin zips uploaded (owner statement). chatbot `chat-empty` → 400 problem+json `query must be 1 to 500 characters` ✔; chatbot vector query without endpoint → 502 problem+json `The AI service is not available.` ✔ (fail fast; duration not captured). sync status / admin total not shown.
+- 2026-11-26 (owner, steps 3–4, endpoint present): vector query (seed user 1 template) → 200 `vector`, 5 rows, row 1 `b44b7820-…` distance 0.0, then 0.380, 0.385, 0.402, 0.402 ascending; timings embedMs 287, dbMs 852, totalMs 1139 (first call, includes cold DB connect); tokens input 27; model `amazon.titan-embed-text-v2:0` (W5-G2 ✔, AC-12.7). sql query → 200 `sql`, rows [[12]], SQL `SELECT COUNT(*) FROM users WHERE (DATE_PART('year', AGE(birthdate)) BETWEEN 25 AND 35) AND country IN ('PL', 'Poland') AND weight_kg > 70 LIMIT 101`; timings llmMs 455, dbMs 328, totalMs 896; tokens 410/53; model `eu.amazon.nova-micro-v1:0`; Lambda duration 899 ms, 126 MB used (AC-12.9; confirms runtime boto3 has `converse` — N3 closed). `sql delete all users` → 400 `The question could not be turned into a safe query. Rephrase it.` (AC-12.10 part).
+- 2026-11-26 (owner screenshots, step 5, deployed SPA as admin `test@gmail.com`): Chat link visible; vector question "проживают в Польше" auto-submitted → `vector · 5 rows · 260 ms` (W5-G1 < 1 s ✔), rows all Poland; "sql how many users live in Poland" + Search → `sql · 1 rows · 501 ms`, executed SQL `SELECT COUNT(*) FROM users WHERE country IN ('PL', 'Poland') LIMIT 101`, count 66. Owner: "everything works". Endpoint `aws-challenge-vpce-bedrock-runtime` deliberately **kept** for a demo video and Week 6 (owner decision 2026-11-26, ≈ $0.26/day; R-18). Non-admin check and Logs Insights (step 7) accepted on the owner statement and the unit tests. → `Review`.
+- 2026-11-26: set to `Done` by the owner (Week 5 closed).

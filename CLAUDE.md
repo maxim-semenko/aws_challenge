@@ -29,7 +29,7 @@ decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (Week 5 — semantic search form — planned and unblocked 2026-11-25: design `Accepted`, ADR-021/ADR-022; Week 4 closed
+planned** (Week 5 — semantic search form — closed 2026-11-26; next: Week 6, not planned yet; Week 4 closed
 2026-11-25).
 
 ## 3. Working rules (mandatory)

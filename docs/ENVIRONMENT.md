@@ -120,7 +120,7 @@ Source: the owner's console screenshots and statements, 2026-11-18 and 2026-11-2
 | Embedding model | Amazon Titan Text Embeddings V2, `amazon.titan-embed-text-v2:0`, eu-west-1, Serverless, 1024 dims (ADR-019) |
 | `aws-challenge-sync` role | adds inline `aws-challenge-sync-bedrock-invoke` (`bedrock:InvokeModel` on the model ARN) |
 | Endpoint security group | `aws-challenge-vpce-sg` (id not reported): inbound HTTPS 443 from `sg-09356f785149eeb60`, no outbound |
-| Bedrock endpoint | `com.amazonaws.eu-west-1.bedrock-runtime`, Interface, subnet `aws-challenge-subnet-private1-eu-west-1a`, SG `aws-challenge-vpce-sg`, private DNS — **created on demand per session and deleted afterwards** (ADR-020); none exists between sessions |
+| Bedrock endpoint | `aws-challenge-vpce-bedrock-runtime`, `com.amazonaws.eu-west-1.bedrock-runtime`, Interface, subnet `aws-challenge-subnet-private1-eu-west-1a`, SG `aws-challenge-vpce-sg`, private DNS — created on demand per session (ADR-020). **Currently EXISTS** (created 2026-11-26, kept by the owner for a demo video and Week 6; ≈ $0.26/day) — delete when done |
 | Database | V2 applied 2026-11-18: extension `vector` (pgvector 0.8.0), `users.embedding vector(1024)`, HNSW index `users_embedding_hnsw_idx`; 1000 synthetic seed users (`seed.invalid` e-mails); all 1002 rows embedded 2026-11-25 |
 | Other endpoints in the account | `vpce-01b735f7b9418cac4` (Interface, `vpce-svc-0aa43e6…`) — not part of this project: the account is a shared corporate account and the endpoint predates the project (owner, 2026-11-25); never touch it. `aws-challenge-vpce-s3` (Gateway) belongs to the project VPC |
 

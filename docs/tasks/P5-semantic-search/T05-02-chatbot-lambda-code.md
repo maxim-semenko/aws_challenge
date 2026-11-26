@@ -2,7 +2,7 @@
 id: T05-02
 title: "Chatbot Lambda: POST /chat (NL → SQL with guard / vector top-5), shared embeddings and HTTP helpers (Python, pytest)"
 phase: P5-semantic-search
-status: Review
+status: Done
 agent: backend
 skills: [python-lambda, admin-api, bedrock-embeddings, http-api-jwt, postgres-pro, test-master]
 depends_on: []
@@ -220,3 +220,4 @@ Git and replaces the Week 1 placeholder.
       Reformat when the file is next touched.
     - N1–N3 stay as recorded.
     - Not verified on PostgreSQL (Docker off; N2).
+- 2026-11-26: set to `Done` by the owner (Week 5 closed).
