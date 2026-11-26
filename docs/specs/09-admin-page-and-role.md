@@ -40,7 +40,8 @@ User actions on `/admin`: **Previous** / **Next** buttons (change `page` by 1). 
 | loading | nothing |
 
 **Header:** the Admin link is rendered only when the signed-in user's token groups contain `admin`; Chat stays as in
-spec 04. Both are display only — `GET /admin` enforces the group (spec 08).
+spec 04. Both are display only — `GET /admin` enforces the group (spec 08). *Week 5:* the Chat link becomes
+admin-only as well ([spec 13](13-chat-page.md)).
 
 **`/admin` page** — heading "Users", then one of:
 

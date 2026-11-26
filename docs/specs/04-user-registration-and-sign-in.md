@@ -82,6 +82,8 @@ attributes per the column "Cognito definition" above.
    signed-in user.
 8. With empty `VITE_AWS_REGION` / `VITE_USER_POOL_*` values the auth routes and links are hidden and the home page renders (spec 01).
 9. The SPA makes no API request, whatever `VITE_API_URL` is; `/chat` and `/admin` show "Not available yet".
+   *(Superseded for `/admin` by spec 09 in Week 3 and for `/chat` and the Chat link — admin-only — by
+   [spec 13](13-chat-page.md) in Week 5.)*
 
 ## Edge Cases / Failure Modes
 

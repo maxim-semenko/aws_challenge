@@ -2,7 +2,7 @@
 
 Related: [CLAUDE.md](../CLAUDE.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [RISKS.md](RISKS.md) ·
 [requirements/](requirements/) · [design/](design/) · [specs/](specs/) · [tasks/](tasks/)
-Last updated: 2026-11-18
+Last updated: 2026-11-25
 
 ## How the plan works
 
@@ -30,7 +30,8 @@ Last updated: 2026-11-18
 | **P2-authorization** | 2 | Curriculum topic only (owner, 2026-11-13): Cognito User Pool + own Amplify Auth screens, personal page from Cognito attributes, HTTP API with JWT authorizer (built by the owner). `admin` group, Admin Lambda code, `/api/...` endpoints and the role line moved to Week 3 | [authentication](design/authentication.md), [api-gateway-auth](design/api-gateway-auth.md) | [04](specs/04-user-registration-and-sign-in.md), [05](specs/05-protected-api.md) |
 | **P3-rest-api-data** | 3 | Curriculum topic: Admin Lambda ↔ RDS Proxy; sync chain Cognito → EventBridge → Lambda. Users table + migrations, DB access without secrets, group `admin`, `GET /admin` (users list; ADR-018), admin table and role line (from the token) in the SPA, handler logs (API access log: Week 6); deep-link fix | [user-sync](design/user-sync.md), [admin-api](design/admin-api.md) | [06](specs/06-users-table-and-migrations.md), [07](specs/07-user-sync.md), [08](specs/08-admin-api.md), [09](specs/09-admin-page-and-role.md) |
 | **P4-vectorisation** | 4 | Curriculum: pgvector extension; vectors from Bedrock computed by the Sync Lambda on insert/update into `users.embedding` — Titan Text Embeddings V2, **1024** dims instead of the curriculum's 1536 (ADR-019); `bedrock-runtime` endpoint only during working sessions (ADR-020); HNSW index; example query `ORDER BY embedding <-> $1 LIMIT 5`; latency on 1000 records (seeded synthetic users) | [vectorisation](design/vectorisation.md) (Accepted) | [10](specs/10-embeddings.md), [11](specs/11-similarity-check.md) |
-| P5+ | 5+ | planned when the next week's requirements arrive (curriculum overview: ARCHITECTURE §1.1) | — | — |
+| **P5-semantic-search** | 5 | Curriculum: admin-only SPA search form (debounced request, results table) → `POST /chat` → Chatbot Lambda: keyword "sql" → Bedrock LLM → SQL (guarded, read-only), otherwise Titan V2 embedding + pgvector top-5; API Gateway 29 s / Lambda 30 s; latency and token logging. Owner decisions 2026-11-25: direct `Converse` instead of a Bedrock Agent (ADR-021), Nova Micro EU profile (ADR-022), master DB user with guard (Q-23 A, R-19 accepted) | [semantic-search](design/semantic-search.md) (Accepted) | [12](specs/12-chat-api.md), [13](specs/13-chat-page.md) |
+| P6+ | 6+ | planned when the next week's requirements arrive (curriculum overview: ARCHITECTURE §1.1) | — | — |
 
 Week 1 (built manually; accepted by the owner 2026-11-12):
 
@@ -94,7 +95,31 @@ flowchart LR
 
 Lanes: **devops** T04-01 → T04-03 · **backend** T04-02 (parallel to T04-01) · **tester** T04-04 at the end.
 
-## Current state (2026-11-18)
+Week 5 (no open blockers since 2026-11-25; design `Accepted`):
+
+```mermaid
+flowchart LR
+    T0501[T05-01 model check + chatbot role/config + 29 s integration timeout] --> T0503[T05-03 endpoint session: uploads, POST /chat checks, endpoint off]
+    T0502[T05-02 chatbot code + shared modules] --> T0503
+    T0504[T05-04 SPA /chat page] --> T0503
+    T0503 --> T0505[T05-05 acceptance]
+```
+
+Lanes: **devops** T05-01 → T05-03 · **backend** T05-02 (parallel to T05-01) · **frontend** T05-04 (parallel) ·
+**tester** T05-05 at the end.
+
+## Current state (2026-11-25)
+
+**Week 5** (semantic search form, 5 tasks in P5-semantic-search) is **planned** (2026-11-25) and **unblocked**
+(2026-11-25). Owner decisions: [Q-21](RISKS.md#q-21) A → direct `Converse` from `chatbot`, no Bedrock Agent
+(ADR-021 Accepted); [Q-22](RISKS.md#q-22) → Amazon Nova Micro via `eu.amazon.nova-micro-v1:0` (ADR-022 Accepted);
+[Q-23](RISKS.md#q-23) A → master DB user + SQL guard + read-only transaction (R-19 accepted). Design
+[semantic-search](design/semantic-search.md) `Accepted`; specs 12 (`POST /chat`), 13 (`/chat` page). **Startable
+now:** T05-01 (devops), T05-02 (backend), T05-04 (frontend). T05-03 waits for T05-01, T05-02, T05-04; T05-05 at the
+end. No new always-on resource; the `bedrock-runtime` endpoint stays on demand (ADR-020).
+
+**Week 4** (data vectorisation) is **`Done`** — closed by the owner on 2026-11-25 (acceptance report in T04-04).
+The paragraph below is its planning state of 2026-11-18.
 
 **Week 4** (data vectorisation, 4 tasks in P4-vectorisation) is **planned** (2026-11-17) and **unblocked**
 (2026-11-18). Owner decisions, priority "as cheap as possible": [Q-15](RISKS.md#q-15) → Titan Text Embeddings V2
@@ -172,6 +197,16 @@ profile; acceptance report in T02-06. Known issue: Amplify deep links 301 → 40
 | [T04-03](tasks/P4-vectorisation/T04-03-sync-deploy-and-similarity-check.md) | Sync upload, V2 migration, back-fill, seed 1000, similarity and latency check | devops | cloud-architect, postgres-pro | T04-01, T04-02 | — | vectorisation | 10, 11 | Done |
 | [T04-04](tasks/P4-vectorisation/T04-04-week-4-acceptance.md) | Week 4 acceptance check | tester | test-master | T04-01, T04-02, T04-03 | — | — | 06, 07, 10, 11 | Done |
 
+### P5-semantic-search
+
+| ID | Task | Agent | Skills | Depends on | Blocked by | Design | Spec | Status |
+|---|---|---|---|---|---|---|---|---|
+| [T05-01](tasks/P5-semantic-search/T05-01-chatbot-bedrock-access-and-config.md) | LLM model check, chatbot role (Bedrock + RDS), chatbot configuration, `POST /chat` integration timeout 29 s | devops | cloud-architect, http-api-jwt, bedrock-embeddings | — | — | semantic-search | 12 | Review |
+| [T05-02](tasks/P5-semantic-search/T05-02-chatbot-lambda-code.md) | Chatbot Lambda: `POST /chat` (NL → SQL with guard / vector top-5), shared embeddings and HTTP helpers | backend | python-lambda, admin-api, bedrock-embeddings, http-api-jwt, postgres-pro, test-master | — | — | semantic-search | 12 | Review |
+| [T05-03](tasks/P5-semantic-search/T05-03-chatbot-deploy-and-session-check.md) | Endpoint session: uploads, `POST /chat` checks, endpoint off | devops | cloud-architect, http-api-jwt, bedrock-embeddings | T05-01, T05-02, T05-04 | — | semantic-search | 12, 13 | In progress |
+| [T05-04](tasks/P5-semantic-search/T05-04-chat-page.md) | SPA: admin-only `/chat` page — form, debounced request, results table | frontend | react-expert, spa-api-client, amplify-auth | — | — | semantic-search | 13 | Review |
+| [T05-05](tasks/P5-semantic-search/T05-05-week-5-acceptance.md) | Week 5 acceptance check | tester | test-master | T05-01, T05-02, T05-03, T05-04 | — | — | 12, 13 | Todo |
+
 ## Change log
 
 | Date | Change |
@@ -198,3 +233,5 @@ profile; acceptance report in T02-06. Known issue: Amplify deep links 301 → 40
 | 2026-11-17 | **Week 4 planned** (data vectorisation; requirements as given): design vectorisation (`Draft`); specs 10, 11; spec 06 (dispatch table: actions `embed-missing`, `seed`, `similar`; column `embedding`), spec 07 note; 4 tasks in P4-vectorisation (T04-01 … T04-03 `Blocked`, T04-04 `Todo`). RISKS: Q-15 re-worked with checked facts (Titan G1 1536 not in eu-west-1; recommended Cohere Embed v4 1536), Q-20 added (network path, recommended interface endpoint), Q-05 closed, R-05 triggered, R-09 updated, R-17 added. ARCHITECTURE v0.11 (§1.1, §2, §3.2, §3.5, §3.6, §5.3, §7, §12; ADR-019, ADR-020 Proposed; ADR-007 to be superseded). Week-04 traceability filled; CLAUDE.md §2 current-week line |
 | 2026-11-18 | **Owner decisions (priority: cheapest):** Q-15 → Titan Text Embeddings V2 `amazon.titan-embed-text-v2:0`, eu-west-1, 1024 dims, normalised — deliberate deviation from W4-G2 (1536; the 1536-dim Titan G1 is not in eu-west-1 and would need NAT + cross-region); ADR-019 Accepted (rewritten), ADR-007 superseded. Q-20 → `bedrock-runtime` interface endpoint created on demand per working session (≈ $0.011/h instead of ≈ $8/month); `sync` fails fast (connect 2 s, one attempt) and never raises on a Bedrock error, `embed-missing` fills NULL vectors later; ADR-020 Accepted (rewritten). Q-15, Q-20, R-05 closed; R-06, R-09 updated; R-18 added (vectors late between sessions, forgotten endpoint). Design vectorisation `Accepted`. Specs 10 (1024, Titan request, client config, error classes, no `EMBEDDING_FAILED`, `embed-missing` per-row with time budget and stop rule, AC-10.2/AC-10.6 reworded, AC-10.7 added), 11 (header, behaviour), 06 (column `vector(1024)`), 07 (note). T04-01 (re-scoped: create/delete endpoint procedures), T04-02, T04-03 (session order, AC-10.7) → `Todo`; T04-04 AC-10.7 added. ARCHITECTURE v0.12 (§1.1, §2 deviation row, §3.5, §3.6, ADR table, §12 G7). CLAUDE.md §2, §4, §8 (owner-approved); week-04 traceability |
 | 2026-11-25 | **Week 4 closed by the owner:** T04-01 … T04-04 → `Done`. pgvector `vector` + `users.embedding vector(1024)` + HNSW on RDS; Titan V2 embeddings for 1002 rows; top-5 similarity ≈ 0.5 ms with index scan; Bedrock endpoint on demand (deleted). Deviation W4-G2: 1024 instead of 1536 (ADR-019). Next: plan Week 5 when the owner starts it |
+| 2026-11-25 | **Week 5 planned** (semantic search form; requirements as given, `requirements/week-05-semantic-search.md`): design semantic-search (`Draft`; direct `Converse` instead of a Bedrock Agent, Nova Micro EU inference profile, SQL guard with `sqlglot` + read-only transaction, same on-demand endpoint, timeouts 29/30 s, admin-only, honest < 1 s only for the vector path); specs 12 (`POST /chat`), 13 (`/chat` page); notes in specs 04, 09; 5 tasks in P5-semantic-search (T05-01 … T05-03 `Blocked`, T05-04, T05-05 `Todo`). RISKS: Q-21, Q-22, Q-23 added; R-19 (LLM SQL safety), R-20 (cross-region profile / SCP), R-21 (Bedrock cost) added; R-15, R-16, R-17, R-18 updated. ARCHITECTURE v0.13 (§1.1, §2 diagram + deviation rows, §3.2, §3.3, §3.6, §5.3, §6, §10, §12; ADR-021, ADR-022 Proposed; ADR-010 row). Week-05 traceability; CLAUDE.md §2 current-week line |
+| 2026-11-25 | **Owner decisions:** Q-21 → A (direct `Converse` from `chatbot`, no Bedrock Agent — S2 "if 'sql' → Bedrock LLM → SQL, else embedding + pgvector" is exactly this); Q-22 → Amazon Nova Micro via `eu.amazon.nova-micro-v1:0` (cheapest; no curriculum model requirement); Q-23 → A (master DB user, SQL guard: single `SELECT` on `users`, read-only transaction, `statement_timeout`, row cap, admin-only; R-19 accepted, R-16 Week 5 extension accepted). Q-21 … Q-23 closed in RISKS.md; ADR-021, ADR-022 `Accepted` (ARCHITECTURE v0.14: §1.1, §2, §3.6, ADR table and texts). Design semantic-search `Accepted`; spec 12 header; week-05 traceability line. T05-01, T05-02, T05-03 unblocked → `Todo`; T05-04, T05-05 notes. Startable now: T05-01, T05-02, T05-04. CLAUDE.md §2/§4 and `.claude/agents/backend.md` edits proposed to the owner (not applied by the architect) |

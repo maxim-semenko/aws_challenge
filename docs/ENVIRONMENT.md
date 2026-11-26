@@ -124,6 +124,17 @@ Source: the owner's console screenshots and statements, 2026-11-18 and 2026-11-2
 | Database | V2 applied 2026-11-18: extension `vector` (pgvector 0.8.0), `users.embedding vector(1024)`, HNSW index `users_embedding_hnsw_idx`; 1000 synthetic seed users (`seed.invalid` e-mails); all 1002 rows embedded 2026-11-25 |
 | Other endpoints in the account | `vpce-01b735f7b9418cac4` (Interface, `vpce-svc-0aa43e6…`) — not part of this project: the account is a shared corporate account and the endpoint predates the project (owner, 2026-11-25); never touch it. `aws-challenge-vpce-s3` (Gateway) belongs to the project VPC |
 
+## Semantic search (Week 5, T05-01)
+
+Source: the owner's screenshots and statements, 2026-11-25.
+
+| Item | Value |
+|---|---|
+| LLM | Amazon Nova Micro via the system-defined inference profile `eu.amazon.nova-micro-v1:0` (EU Nova Micro; routes to eu-west-3, eu-west-1, eu-central-1, eu-north-1), direct Converse — no Bedrock Agent (ADR-021, ADR-022) |
+| `aws-challenge-chatbot` role | `aws-challenge-chatbot-role-3euwe6l7`: basic execution + VPC access (console, Week 1) + inline `aws-challenge-chatbot-rds-connect` (`rds-db:connect` on `prx-019d0caac664f7be9/postgres`) + inline `aws-challenge-chatbot-bedrock-invoke` (`bedrock:InvokeModel` on Titan V2, the EU Nova Micro profile, and Nova Micro in the 4 destination regions only through the profile) |
+| `aws-challenge-chatbot` config | Python 3.12, 512 MB, 30 s, env `DB_PROXY_ENDPOINT` / `DB_NAME=postgres` / `DB_USER=postgres`; log retention 2 weeks |
+| `POST /chat` integration | `dyujbqp` (route `2r7hjw2`) → `aws-challenge-chatbot`, payload 2.0, timeout 29000 ms |
+
 ## Not recorded yet
 
 Supplied by the owner when a task needs them: DB instance security groups (Connectivity & security → Security section), function memory/timeout/role, Amplify app id.

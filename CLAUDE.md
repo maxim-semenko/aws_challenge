@@ -29,7 +29,8 @@ decisions with rationale and alternatives; the project owner (Max) decides.
 
 Goal — "You Build It, You Run It": build, configure and securely deploy a cloud application on AWS covering
 G1–G8 (ARCHITECTURE.md §1, §12). The work arrives as weekly curriculum assignments; **only the current week is
-planned** (Week 4 — data vectorisation — closed 2026-11-25; next: Week 5, not planned yet).
+planned** (Week 5 — semantic search form — planned and unblocked 2026-11-25: design `Accepted`, ADR-021/ADR-022; Week 4 closed
+2026-11-25).
 
 ## 3. Working rules (mandatory)
 
@@ -58,12 +59,12 @@ planned** (Week 4 — data vectorisation — closed 2026-11-25; next: Week 5, no
 | Area | Choice | Status |
 |---|---|---|
 | Server code | Python 3.12 AWS Lambda functions `admin`, `chatbot`, `sync` (also applies the SQL migrations, ADR-017), `post-confirmation` (ADR-016), zip deploys, one directory per function under `lambdas/`; no backend application (ADR-015) | accepted |
-| Lambda libraries | `boto3` (runtime), `pg8000`, Powertools for AWS Lambda (Python) Logger from Week 6, `pytest` | proposed in ADR-015 |
+| Lambda libraries | `boto3` (runtime), `pg8000`, `sqlglot` (chatbot only, SQL guard — design semantic-search), Powertools for AWS Lambda (Python) Logger from Week 6, `pytest` | proposed in ADR-015 |
 | AWS SDK | `boto3` in Lambdas; JS SDK v3 only through `aws-amplify` | accepted |
 | Database | RDS PostgreSQL 14 (Week 1 build, R-14); pgvector from Week 4, `vector(1024)`, Titan V2, ADR-019; versioned SQL migrations `V<n>__<description>.sql`, tool per Q-16 | — |
 | Frontend | React 19, Vite 6, TypeScript 5.8 strict, React Router 7, TanStack Query 5, `aws-amplify` 6 — Vite SPA, no Next.js / Server Components; npm (Gradle Wrapper 9.8.2 only wraps the npm scripts in `frontend/build.gradle`) | accepted |
 | AWS changes | made by the owner in the AWS console from a devops console runbook in the task (§3.11, Q-12 C); IaC tool per Q-02 in the later task T00-03 (ADR-001 deferred) | accepted (console runbooks); IaC pending Q-02 |
-| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (+ Agent), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
+| Cloud | Amplify Hosting, VPC, RDS + RDS Proxy, Lambda, Secrets Manager, CloudWatch; Week 2 Cognito, HTTP API; later EventBridge, Bedrock (Titan V2 embeddings, Nova Micro via direct Converse; no Agent — ADR-021), X-Ray | region per ADR-009 (facts as built: ARCHITECTURE §4) |
 | Tests | `pytest` (Lambdas); frontend test runner introduced by the first task that needs one; Playwright for E2E (planned) | — |
 | Local | Windows, IntelliJ IDEA, Node 22 / npm 10, Python 3.13 for local tests and packaging (Lambda runtime 3.12, code 3.12-compatible), Docker Desktop; AWS access only through the owner's console session (agents: none, §3.11) | — |
 
