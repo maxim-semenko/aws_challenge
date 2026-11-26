@@ -84,7 +84,36 @@ export function adminUsersPath(page: number): string {
 
 export const adminUsersQueryKey = (page: number) => ['admin', 'users', page] as const
 
-/** Endpoints used by the SPA; POST /chat is added in Week 5 with its spec. */
+// ---- POST /chat (field names: spec 12 §Inputs / §Outputs) ----
+
+/** The only field the SPA sends (spec 12 §Inputs); `query` is the trimmed text, 1…500 characters. */
+export interface ChatRequest {
+  query: string
+}
+
+export type ChatCell = string | number | boolean | null
+
+export interface ChatResponse {
+  mode: 'sql' | 'vector'
+  columns: string[]
+  rows: ChatCell[][]
+  rowCount: number
+  truncated: boolean
+  sql: string | null
+  timings: { embedMs: number | null; llmMs: number | null; dbMs: number; totalMs: number }
+  tokens: { input: number; output: number }
+  modelId: string
+}
+
+export const chatQueryKey = (query: string) => ['chat', query] as const
+
+function chat(query: string): Promise<ChatResponse> {
+  const body: ChatRequest = { query }
+  return api<ChatResponse>('/chat', { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** Endpoints used by the SPA. */
 export const endpoints = {
   adminUsers: (page: number) => api<Page<User>>(adminUsersPath(page)),
+  chat,
 }

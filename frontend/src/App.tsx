@@ -10,8 +10,8 @@ import { SignUpPage } from './pages/SignUpPage'
 import './App.css'
 
 /**
- * Header: Chat only for a signed-in user, Admin only when the access token `cognito:groups` claim contains `admin`
- * (spec 09, display only, no API call); auth links only when Cognito is configured (AC-04.10). Without configuration
+ * Header: Chat and Admin only when the access token `cognito:groups` claim contains `admin` (spec 09, spec 13;
+ * display only, no API call); auth links only when Cognito is configured (AC-04.10). Without configuration
  * the session query is disabled, so everybody is anonymous.
  */
 function Header() {
@@ -29,10 +29,10 @@ function Header() {
           <NavLink to="/" end>
             Home
           </NavLink>
-          {signedIn && (
+          {signedIn && isAdmin && (
             <>
               <NavLink to="/chat">Chat</NavLink>
-              {isAdmin && <NavLink to="/admin">Admin</NavLink>}
+              <NavLink to="/admin">Admin</NavLink>
             </>
           )}
         </nav>
@@ -65,7 +65,10 @@ export default function App() {
       <main className="container">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route
+            path="/chat"
+            element={isApiConfigured ? <RequireAuth><ChatPage /></RequireAuth> : <ChatPage />}
+          />
           <Route
             path="/admin"
             element={isApiConfigured ? <RequireAuth><AdminPage /></RequireAuth> : <AdminPage />}

@@ -50,11 +50,12 @@ used and there is no `/confirm` route. The owner confirms new users in the Cogni
 
 `/sign-up` and `/sign-in` are wrapped in `AnonymousOnly` (signed-in users go to the requested page or `/`). Home `/` is
 public and switches on `useSession`: profile when signed in, intro with sign-in / sign-up links otherwise. `/me` and
-`/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat only to a signed-in user and
-Admin only when the access token `cognito:groups` claim contains `admin` (`useGroups`; spec 09, T03-08). The
+`/confirm` were removed; the catch-all route sends them to `/`. The header shows Chat and
+Admin only when the access token `cognito:groups` claim contains `admin` (`useGroups`; spec 09, T03-08; Chat
+admin-only from spec 13, T05-04); `/chat` also shows the no-access text to non-admins without a request. The
 profile card shows "Role: administrator" / "Role: user" from the same claim. `RequireAuth` (anonymous →
 `/sign-in` with `state.from`, back to `from` after sign-in; only same-origin paths starting with a single `/` are
-accepted, `redirectTarget`) wraps `/admin` when the API is configured (`isApiConfigured`).
+accepted, `redirectTarget`) wraps `/admin` and `/chat` when the API is configured (`isApiConfigured`).
 
 ## Validation and errors
 
